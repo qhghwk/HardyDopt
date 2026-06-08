@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Hardy-Cross 배관망 설계 + 최적 직경</title>
+<style>
+  :root{
+    --bg:#f3f4f6; --panel:#ffffff; --panel2:#eef1f4; --line:#d8dce1;
+    --text:#2b2f33; --accent:#00897b; --accent2:#1976d2; --warn:#ef6c00; --bad:#d32f2f; --good:#2e7d32;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:"Segoe UI",sans-serif; background:var(--bg); color:var(--text);}
+  header{padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  header h1{font-size:16px; margin:0; color:var(--accent);}
+  .toolbar button{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:7px 14px; cursor:pointer; font-size:13px;}
+  .toolbar button.active{background:var(--accent2); color:#fff; border-color:var(--accent2);}
+  .toolbar button:hover{border-color:var(--accent);}
+  main{display:flex; height:calc(100vh - 54px);}
+  #canvasWrap{flex:1; position:relative; overflow:hidden; background:repeating-linear-gradient(0deg,#e4e7eb 0 1px,#fafbfc 1px 28px),repeating-linear-gradient(90deg,#e4e7eb 0 1px,#fafbfc 1px 28px);}
+  canvas{position:absolute; top:0; left:0;}
+  #selPopup{position:absolute; z-index:6; display:none; background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    box-shadow:0 6px 20px rgba(0,0,0,0.18); padding:10px 12px; font-size:12px; min-width:220px; max-width:270px; max-height:72vh; overflow-y:auto;}
+  #selPopup .close{position:absolute; top:6px; right:8px; cursor:pointer; color:#9aa0a6; font-size:13px;}
+  #selPopup .row label{flex:0 0 80px;}
+  #sidebar{width:320px; background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; padding:12px;}
+  #sidebar h3{color:var(--accent); font-size:13px; margin:14px 0 8px; border-bottom:1px solid var(--line); padding-bottom:4px;}
+  #sidebar h3:first-child{margin-top:0;}
+  #sidebar .category{font-size:13px; font-weight:700; color:#fff; background:var(--accent2); margin:0 -12px 12px; padding:9px 12px; letter-spacing:0.3px;}
+  #sidebar .category.cat2{background:#00897b; margin-top:20px;}
+  .row{display:flex; align-items:center; gap:6px; margin:5px 0; font-size:12px;}
+  .row label{flex:0 0 90px; color:#1976d2;}
+  .row input, .row select{flex:1; background:#fff; color:var(--text); border:1px solid var(--line); border-radius:4px; padding:4px 6px; font-size:12px;}
+  .row select.unit-sel{flex:0 0 72px;}
+  .hint{font-size:11px; color:#6b7177; line-height:1.5; margin:4px 0;}
+  .pill{display:inline-block; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:11px; color:var(--accent);}
+  #photoPanel{position:absolute; z-index:7; display:none; left:16px; top:16px; width:25%; height:25%; min-width:160px; min-height:120px;
+    background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.18);
+    overflow:hidden; resize:both; flex-direction:column;}
+  #photoPanel.show{display:flex;}
+  #photoPanel .photoHandle{cursor:move; font-size:10px; letter-spacing:1px; color:#9aa0a6; user-select:none;
+    display:flex; align-items:center; justify-content:space-between; padding:5px 10px; background:var(--panel2); border-bottom:1px solid var(--line);}
+  #photoPanel .photoHandle .close{cursor:pointer; color:#9aa0a6; font-size:13px;}
+  #photoPanel .photoHandle .close:hover{color:var(--bad);}
+  #photoPanel .photoBody{flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; background:#f6f7f9;}
+  #photoPanel .photoBody img{max-width:100%; max-height:100%; object-fit:contain;}
+  #photoPanel .photoEmpty{font-size:11px; color:#9aa0a6; text-align:center; padding:12px;}
+  #threeWrap{position:absolute; inset:0; display:none; background:#1b1b1b;}
+  #threeWrap.show{display:block;}
+  .closeBtn{position:absolute; top:10px; right:10px; z-index:5; background:#c0392b; color:#fff; border:none; border-radius:6px; padding:6px 12px; cursor:pointer;}
+  .msg{font-size:11px; margin-top:6px;}
+  table{border-collapse:collapse; width:100%; font-size:11px;}
+  td,th{border:1px solid var(--line); padding:3px 6px; text-align:center;}
+  th{background:var(--panel2); color:var(--accent);}
+</style>
+</head>
+<body>
+<header>
+  <h1>Hardy-Cross 배관망 설계기</h1>
+  <div class="toolbar">
+    <button id="btn-node">● 노드</button>
+    <button id="btn-pump">⚙ 펌프</button>
+    <button id="btn-pipe">— 배관</button>
+    <button id="btn-arrow">↗ 화살표(유출입)</button>
+    <button id="btn-select">↖ 선택/이동</button>
+    <button id="btn-delete">🗑 삭제</button>
+    <button id="btn-clear">⨯ 전체 초기화</button>
+    <button id="btn-solve" style="background:#2e7d32; border-color:#2e7d32; color:#fff;">▶ Hardy-Cross 계산</button>
+    <span id="solveStatus" class="hint" style="margin-left:6px"></span>
+    <button id="btn-3d" style="background:#5e35b1; border-color:#5e35b1; color:#fff;">🧊 3D 보기</button>
+    <button id="btn-photo" style="background:#6d4c41; border-color:#6d4c41; color:#fff;">🖼 사진</button>
+    <input type="file" id="photo-input" accept="image/*" style="display:none"/>
+    <button id="btn-pump-result" style="background:#00897b; border-color:#00897b; color:#fff;">📂 Project Database →</button>
+  </div>
+  <span class="hint" style="margin-left:auto">노드/펌프=클릭 배치 · 배관=두 노드 순서클릭 · 화살표=드래그 연결 · 요소 클릭=설정창 (Shift=다중선택)</span>
+</header>
+<main>
+  <div id="canvasWrap">
+    <canvas id="cv"></canvas>
+    <div id="selPopup"></div>
+    <div id="threeWrap">
+      <button class="closeBtn" id="btn-3d-close">✕ 닫기</button>
+    </div>
+    <div id="photoPanel">
+      <div class="photoHandle" id="photoHandle"><span>⠿⠿⠿ 참고 사진 (드래그 이동 · 모서리로 크기조절)</span><span class="close" id="btn-photo-close">✕</span></div>
+      <div class="photoBody" id="photoBody"><span class="photoEmpty">사진을 업로드하면 여기에 표시됩니다</span></div>
+    </div>
+  </div>
+  <div id="sidebar">
+    <div class="category cat1">🌐 공통 설정 (Doptimization)</div>
+    <div class="row"><label>전기요금 C₂</label><input id="g-C2" type="text" placeholder="예: 150"/><select id="g-C2unit" class="unit-sel"><option>원/kWh</option><option>$/kWh</option></select>
+      <button type="button" id="g-C2-link" title="전기요금 참고" style="flex:0 0 auto; padding:4px 8px; font-size:11px; background:var(--panel2); color:var(--accent); border:1px solid var(--line); border-radius:4px; cursor:pointer;">🔗</button></div>
+    <div class="row"><label>운영시간 t</label><input id="g-t" type="text" placeholder="예: 4000"/>
+      <select id="g-tUnit" class="unit-sel"><option value="h_yr">h/yr</option><option value="h_day">h/day</option><option value="day_yr">day/yr</option></select></div>
+    <div class="row"><label>효율 η</label><input id="g-eta" type="text" placeholder="0.75"/></div>
+    <div class="row"><label>이자율 i (%)</label><input id="g-i" type="text" placeholder="예: 4.5"/>
+      <button type="button" id="g-i-link" title="기준금리 참고" style="flex:0 0 auto; padding:4px 8px; font-size:11px; background:var(--panel2); color:var(--accent); border:1px solid var(--line); border-radius:4px; cursor:pointer;">🔗</button></div>
+    <div class="row"><label>상환기간 n</label><input id="g-n" type="text" placeholder="years"/></div>
+    <div class="row"><label>유체</label><select id="g-fluid"></select></div>
+    <div class="row" id="g-T-row" style="display:none"><label>온도 T</label><input id="g-T" type="text" placeholder="예: 25"/>
+      <select id="g-Tunit" class="unit-sel"><option>°C</option><option>°F</option><option>K</option></select></div>
+    <div class="row" id="g-P-row" style="display:none"><label>압력 P</label><input id="g-P" type="text" placeholder="예: 1.013"/>
+      <select id="g-Punit" class="unit-sel"><option>bar</option><option>atm</option><option>psi</option><option>kPa</option></select></div>
+    <div id="g-fluid-props" class="hint"></div>
+    <div class="hint">요소별 값(펌프 출력·노드 높이·조도 등)은 캔버스에서 클릭하면 뜨는 창에서 설정. C₁,n,b,F는 caculbF.json 있으면 배관별 계산, 없으면 기본값 사용.</div>
+    <div id="doptBox" class="hint"></div>
+    <button id="btn-dopt-batch" style="margin-top:6px; width:100%; background:#00897b; border-color:#00897b; color:#fff;">📐 전체 배관 D_opt 일괄계산</button>
+    <div id="doptBatchBox" class="hint" style="margin-top:6px"></div>
+
+    <h3>C₁, n 카탈로그 피팅</h3>
+    <div id="c1nFitBox"></div>
+
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="fluid-module.js?v=2"></script>
+<script src="solver-module.js?v=3"></script>
+<script src="canvas-design-module.js?v=3"></script>
+<script src="catalog-fit-module.js?v=1"></script>
+<script src="three-view-module.js?v=3"></script>
+<script>
+/* ============================================================
+   ORCHESTRATION — 각 모듈을 초기화하고 서로 연결만 담당
+   (그리기/상태 = CanvasModule, 솔버 = SolverModule,
+    유체 = FluidModule, 3D = ThreeViewModule)
+   ============================================================ */
+
+/* ---- 참고 자료 링크 버튼 (이자율 / 전기요금) ---- */
+document.getElementById("g-i-link").addEventListener("click", ()=>{
+  window.open("https://snapshot.bok.or.kr/dashboard/A4", "_blank");
+});
+document.getElementById("g-C2-link").addEventListener("click", ()=>{
+  window.open("https://www.globalpetrolprices.com/electricity_prices/", "_blank");
+});
+
+/* ---- 참고 데이터 (조도/부속·펌프 비용계수/동원펌프 카탈로그) 비동기 로드 ---- */
+window.RefData = window.RefData || {};
+["roughness", "caculbF", "dongwonpump"].forEach(name=>{
+  fetch(name + ".json").then(r=>r.ok ? r.json() : null).then(d=>{ if(d) window.RefData[name] = d; }).catch(()=>{});
+});
+
+/* ---- 캔버스 / 그림판 UI ---- */
+CanvasModule.init({
+  canvasId: "cv", wrapId: "canvasWrap",
+  modeButtons: { node: "btn-node", pump: "btn-pump", pipe: "btn-pipe", arrow: "btn-arrow", select: "btn-select", delete: "btn-delete" },
+  clearBtnId: "btn-clear",
+  selPopupId: "selPopup"
+});
+
+/* ---- 유체 물성 ---- */
+const fluidInitP = FluidModule.init({
+  selectId: "g-fluid", T_rowId: "g-T-row", P_rowId: "g-P-row",
+  T_id: "g-T", P_id: "g-P", T_unitId: "g-Tunit", P_unitId: "g-Punit", outId: "g-fluid-props"
+});
+
+/* ---- 설계 상태 저장/복원 (Project Database 페이지를 다녀와도 입력값 유지) ----
+   sessionStorage["designState"] = { canvas: CanvasModule.exportState(), fields: {입력 id: value} } */
+const SAVED_FIELD_IDS = ["g-C2","g-C2unit","g-t","g-tUnit","g-eta","g-i","g-n","g-T","g-Tunit","g-P","g-Punit"];
+const FLUID_FIELD_IDS = ["g-fluid"];
+function setFieldValue(id, val){
+  const el = document.getElementById(id);
+  if (el == null || val == null) return;
+  el.value = val;
+  el.dispatchEvent(new Event("change"));
+  el.dispatchEvent(new Event("input"));
+}
+function saveDesignState(){
+  const fields = {};
+  SAVED_FIELD_IDS.concat(FLUID_FIELD_IDS).forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) fields[id] = el.value;
+  });
+  sessionStorage.setItem("designState", JSON.stringify({ canvas: CanvasModule.exportState(), fields }));
+}
+(function restoreDesignState(){
+  const raw = sessionStorage.getItem("designState");
+  if (!raw) return;
+  let data;
+  try { data = JSON.parse(raw); } catch(e){ return; }
+  if (data.canvas) CanvasModule.loadState(data.canvas);
+  if (data.fields) {
+    SAVED_FIELD_IDS.forEach(id => setFieldValue(id, data.fields[id]));
+    // 유체 선택은 목록이 비동기 로드되므로 로드 완료 후 복원
+    Promise.resolve(fluidInitP).then(()=> FLUID_FIELD_IDS.forEach(id => setFieldValue(id, data.fields[id])));
+  }
+})();
+
+/* ---- C₁, n 카탈로그 피팅 (비용/길이 · Inner Diameter 행 입력 → power-law 회귀 → 선택 배관에 적용) ---- */
+CatalogFitModule.init({
+  containerId: "c1nFitBox",
+  onApply: (C1, n) => {
+    const state = CanvasModule.getState();
+    const pipes = (state.selected || []).filter(s => s.type === "pipe")
+      .map(s => state.pipes.find(p => p.id === s.id)).filter(Boolean);
+    if (!pipes.length) { alert("적용할 배관을 먼저 캔버스에서 선택해주세요 (Shift+클릭으로 여러 개 선택 가능)."); return; }
+    pipes.forEach(p => { p.c1 = C1; p.n_exp = n; });
+    CanvasModule.draw();
+    CanvasModule.renderSelPopup();
+    alert(`선택된 배관 ${pipes.length}개에 C₁=${C1.toExponential(4)}, n=${n.toFixed(4)} 적용 완료.`);
+  }
+});
+
+
+/* ---- 3D 뷰 ---- */
+ThreeViewModule.init({
+  wrapId: "threeWrap", openBtnId: "btn-3d", closeBtnId: "btn-3d-close",
+  getState: CanvasModule.getState, getCanvas: CanvasModule.getCanvas
+});
+
+/* ---- 전역 입력값 수집 → 솔버에 전달 ---- */
+function getGlobalParams(){
+  const num = id=>{ const v=parseFloat(document.getElementById(id).value); return isFinite(v)?v:null; };
+  const fluid = FluidModule.getProps();
+  const tUnit = document.getElementById("g-tUnit")?.value || "h_yr";
+  const t_raw = num("g-t");
+  const t_h_yr = t_raw == null ? null
+    : tUnit === "h_day" ? t_raw * 365
+    : tUnit === "day_yr" ? t_raw * 24
+    : t_raw; // h_yr
+  return {
+    rho: fluid.rho ?? 1000,
+    mu: fluid.mu ?? 0.001,
+    C2: num("g-C2"),
+    t: t_h_yr,
+    eta: num("g-eta") ?? 0.75,
+    i: num("g-i"),
+    n: num("g-n"),
+  };
+}
+
+/* ---- 전체 배관 D_opt 일괄계산 (D_i = D_opt(Q_i) — 각 배관 자신의 유량 Q_i에 대한 함수로 D_i를 산출) ---- */
+function computeAllDopt(){
+  const out = document.getElementById("doptBatchBox");
+  const state = CanvasModule.getState();
+  if (state.pipes.length === 0) {
+    out.innerHTML = `<div class="alert alert-warn">⚠️ 캔버스에 배관이 없습니다. 먼저 배관을 그려주세요.</div>`;
+    return;
+  }
+
+  const gp = getGlobalParams();
+  const fluid = FluidModule.getProps();
+  const a_crf = SolverModule.calcCRF(gp.i, gp.n);
+
+  // ── 부족한 "전역" 입력값 점검 ──
+  const missing = [];
+  if (fluid.rho == null) missing.push("유체 밀도 ρ (유체 선택/온도·압력)");
+  if (fluid.mu  == null) missing.push("유체 점도 μ (유체 선택/온도·압력)");
+  if (gp.C2 == null) missing.push("전기요금 C₂");
+  if (gp.t  == null) missing.push("운영시간 t");
+  if (gp.i  == null) missing.push("이자율 i");
+  if (gp.n  == null) missing.push("상환기간 n");
+  if (a_crf == null) missing.push("CRF (이자율·상환기간을 다시 확인)");
+
+  // ── 배관별 유량 Q_i 점검: 고정 유량(fixedQ) 우선, 없으면 직전 Hardy-Cross 계산 결과(Q) 사용 ──
+  const rows = [];
+  const qMissing = [];
+  state.pipes.forEach(p => {
+    const Q = (p.fixedQ != null && isFinite(p.fixedQ)) ? p.fixedQ
+            : (p.Q != null && isFinite(p.Q) && p.Q !== 0) ? p.Q
+            : null;
+    if (Q == null) qMissing.push(`P${p.id}`);
+    rows.push({ p, Q });
+  });
+  if (qMissing.length) missing.push(`배관 유량 Q (배관에 "고정 유량" 직접 입력 또는 ▶ Hardy-Cross 계산을 먼저 실행): ${qMissing.join(", ")}`);
+
+  if (missing.length) {
+    out.innerHTML = `<div class="alert alert-warn">⚠️ 입력 부족 — 다음 항목을 채워주세요:<br/>${missing.map(m=>`· ${m}`).join("<br/>")}</div>`;
+    return;
+  }
+
+  // ── 배관별 b,F 계산 (외부 펌프=망 전체 동일, 그 외 부속/밸브/높이차/내부펌프=해당 배관에만 적용) ──
+  const bf = SolverModule.calcBF(state, gp);
+  const DEF = { C1: SolverModule.DEFAULT_C1, n_exp: SolverModule.DEFAULT_N_EXP, b: SolverModule.DEFAULT_B, F: SolverModule.DEFAULT_F };
+
+  // ── 배관별로 자신의 Q_i 와, 자신에게 적용되는 b/F(외부펌프 전역분 + 자신의 부속/밸브/높이차 + 해당 시 내부펌프 영역분)를 대입해 D_i = D_opt(Q_i) 계산 ──
+  let html = `<table><tr><th>배관</th><th>Q (자신의 유량)</th><th>D = D_opt(Q)</th><th>적용 b / F</th></tr>`;
+  rows.forEach(({ p, Q }) => {
+    const pipeBF = (bf && bf.perPipe && bf.perPipe[p.id]) ? bf.perPipe[p.id] : null;
+    const D = SolverModule.doptForQ(Q, p, gp, pipeBF);
+    const bVal = pipeBF && isFinite(pipeBF.b) ? pipeBF.b : DEF.b;
+    const FVal = pipeBF && isFinite(pipeBF.F) ? pipeBF.F : DEF.F;
+    html += `<tr>
+      <td>P${p.id} (N${p.from}→N${p.to})</td>
+      <td>Q<sub>${p.id}</sub> = ${Q.toExponential(3)} m³/s</td>
+      <td>D<sub>${p.id}</sub> = D_opt(Q<sub>${p.id}</sub>) = ${D != null ? `<b>${(D*1000).toFixed(2)} mm</b>` : '계산 불가'}</td>
+      <td>b=${(+bVal).toFixed(4)}, F=${(+FVal).toFixed(4)}${pipeBF ? ' <span class="pill">caculbF.json 적용</span>' : ''}</td>
+    </tr>`;
+  });
+  html += `</table>
+  <div class="hint" style="margin-top:6px">각 D=D_opt(자신의 Q, b/F 적용). 기본 계수: C₁=${DEF.C1}, n=${DEF.n_exp}, b=${DEF.b.toFixed(4)}, F=${DEF.F.toFixed(4)}, CRF=${a_crf.toFixed(6)}</div>`;
+  out.innerHTML = html;
+}
+document.getElementById("btn-dopt-batch").addEventListener("click", computeAllDopt);
+
+/* ---- 결과 요약 박스 ---- */
+function renderDoptBox(r){
+  const box = document.getElementById("doptBox");
+  const a_crf = SolverModule.calcCRF(r.gp.i, r.gp.n);
+  const DEF = { C1: SolverModule.DEFAULT_C1, n_exp: SolverModule.DEFAULT_N_EXP, b: SolverModule.DEFAULT_B, F: SolverModule.DEFAULT_F };
+  const bfNote = r.bf
+    ? `caculbF.json 기반 계산 — 외부 펌프 b/F는 망 전체 공통, 그 외(기본 유지보수, 부속/밸브, 높이차, 내부 펌프)는 해당 배관에만 적용 (전역 구성요소 ${r.bf.count}개: b=${r.bf.b_total.toFixed(4)}, F=${r.bf.F_total.toFixed(4)})`
+    : `caculbF.json 미로드 — 기본값(b=${DEF.b.toFixed(4)}, F=${DEF.F.toFixed(4)}) 사용`;
+  box.innerHTML = `CRF = ${a_crf!=null? a_crf.toFixed(6) : '(이자율/기간 입력 필요)'}<br/>
+  기본 계수: C₁=${DEF.C1}, n=${DEF.n_exp}, b=${DEF.b.toFixed(4)}, F=${DEF.F.toFixed(4)} (배관별 caculbF.json 값이 있으면 그 값으로 대체)<br/>
+  ${bfNote}`;
+}
+
+/* ---- 계산 버튼 ---- */
+let lastSolve = null; // { state, gp, r } — 마지막 Hardy-Cross 계산 결과 (펌프 추천 결과 페이지로 전달용)
+document.getElementById("btn-solve").addEventListener("click", ()=>{
+  const out = document.getElementById("solveStatus");
+  const state = CanvasModule.getState();
+  if(state.nodes.length<2 || state.pipes.length<1){ out.textContent="⚠ 노드 2개·배관 1개 이상 필요"; return; }
+  const gp = getGlobalParams();
+  const r = SolverModule.solveNetwork(state, gp);
+  if(r.error){ out.textContent = r.error; return; }
+  lastSolve = { state, gp, r };
+  out.textContent = `${r.converged?'✓ 수렴':'⚠️ 미수렴'} (${r.iterations}회) — 자세한 결과는 Project Database 참조`;
+  CanvasModule.draw();
+  renderDoptBox(r);
+});
+
+/* ---- Project Database 페이지로 이동 ----
+   Hardy-Cross 계산 결과(state.pipes의 Q, D, _Kp)를 바탕으로
+   ① 공식 계수 ② Hardy-Cross 결과 ③ Diameter Dependence 평가 ④ Pump 추천
+   네 섹션에 필요한 값을 모두 미리 계산해 sessionStorage에 저장하고, 별도 페이지(project-database.html)로 이동한다. */
+function buildProjectDatabase(state, gp, r){
+  const SM = SolverModule;
+  const DEF = { C1: SM.DEFAULT_C1, n_exp: SM.DEFAULT_N_EXP, b: SM.DEFAULT_B, F: SM.DEFAULT_F };
+  const bf = (r && r.bf) ? r.bf : SM.calcBF(state, gp);
+  const G = SM.G;
+
+  const pipes = state.pipes.map(p=>{
+    const pipeBF = (bf && bf.perPipe && bf.perPipe[p.id]) ? bf.perPipe[p.id] : null;
+    const c1Applied = (p.c1 != null && isFinite(p.c1)) ? p.c1 : DEF.C1;
+    const nExpApplied = (p.n_exp != null && isFinite(p.n_exp)) ? p.n_exp : DEF.n_exp;
+    const bApplied = (pipeBF && isFinite(pipeBF.b)) ? pipeBF.b : DEF.b;
+    const FApplied = (pipeBF && isFinite(pipeBF.F)) ? pipeBF.F : DEF.F;
+
+    let hf=null, hm=null, hLoss=null, elevDiff=null, H_total=null, ratio=null;
+    const D = p.D, Q = p.Q;
+    if (D != null && isFinite(D) && D > 0 && Q != null && isFinite(Q)) {
+      const A = SM.pipeArea(D);
+      const v = Q / A;
+      const Re = gp.rho * Math.abs(v) * D / gp.mu;
+      const f = SM.colebrookF(Re, SM.pipeEps(p) / D);
+      hf = f * (p.length / D) * (v * Math.abs(v)) / (2 * G);
+      const sumK = (p.fittingsK || []).reduce((s,k)=> s + (SM.FITTING_K[k] || 0), 0);
+      hm = sumK * (v * Math.abs(v)) / (2 * G);
+      hLoss = Math.abs(hf) + Math.abs(hm);
+      const nA = state.nodes.find(n=>n.id===p.from);
+      const nB = state.nodes.find(n=>n.id===p.to);
+      if (nA && nB && isFinite(nA.height) && isFinite(nB.height)) elevDiff = Math.abs(nB.height - nA.height);
+      H_total = (elevDiff || 0) + hLoss;
+      ratio = hLoss > 1e-12 ? H_total / hLoss : null;
+    }
+
+    return {
+      id: p.id, from: p.from, to: p.to, length: p.length, D, Q, fixedQ: p.fixedQ,
+      eps: p.eps, material: p.material, fittingsK: p.fittingsK || [],
+      c1Applied, nExpApplied, bApplied, FApplied,
+      hf, hm, hLoss, elevDiff, H_total, ratio,
+    };
+  });
+
+  const pumps = SM.computePumpHeads(state, gp);
+
+  return {
+    savedAt: Date.now(),
+    globalParams: { rho: gp.rho, mu: gp.mu, C2: gp.C2, t: gp.t, eta: gp.eta, i: gp.i, n: gp.n },
+    defaults: DEF,
+    hasSolveResult: !!r,
+    converged: r ? r.converged : null, iterations: r ? r.iterations : null,
+    loops: r ? r.loops : (SM.findLoops ? SM.findLoops(state).length : null),
+    Q_out_m3h: r ? r.Q_out_m3h : null,
+    bfSummary: bf ? { b_total: bf.b_total, F_total: bf.F_total, count: bf.count } : null,
+    pipes, pumps,
+  };
+}
+
+document.getElementById("btn-pump-result").addEventListener("click", ()=>{
+  // Hardy-Cross 계산을 아직 실행하지 않았어도, 현재까지 입력된 상태를 기준으로
+  // Project Database를 항상 열람할 수 있도록 한다 (계산 결과가 있으면 그 결과를, 없으면 현재 입력값 기준으로 채움).
+  const state = lastSolve ? lastSolve.state : CanvasModule.getState();
+  const gp = lastSolve ? lastSolve.gp : getGlobalParams();
+  const r = lastSolve ? lastSolve.r : null;
+  const data = buildProjectDatabase(state, gp, r);
+  sessionStorage.setItem("projectDatabase", JSON.stringify(data));
+  saveDesignState();
+  window.location.href = "project-database.html";
+});
+
+/* ---- 참고 사진 업로드 & 1/4 화면 보기 패널 ---- */
+(function(){
+  const panel = document.getElementById("photoPanel");
+  const handle = document.getElementById("photoHandle");
+  const body = document.getElementById("photoBody");
+  const btnPhoto = document.getElementById("btn-photo");
+  const fileInput = document.getElementById("photo-input");
+  const btnClose = document.getElementById("btn-photo-close");
+  const wrap = document.getElementById("canvasWrap");
+
+  btnPhoto.addEventListener("click", ()=> fileInput.click());
+
+  fileInput.addEventListener("change", ()=>{
+    const f = fileInput.files && fileInput.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      body.innerHTML = `<img src="${e.target.result}" alt="참고 사진"/>`;
+      panel.classList.add("show");
+    };
+    reader.readAsDataURL(f);
+    fileInput.value = "";
+  });
+
+  btnClose.addEventListener("click", ()=> panel.classList.remove("show"));
+
+  // 드래그 이동 (포인터 이벤트, 핸들 클릭 시 패널 위치 이동)
+  let drag = null;
+  handle.addEventListener("pointerdown", (e)=>{
+    if (e.target === btnClose) return;
+    const wrapRect = wrap.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    drag = {
+      offX: e.clientX - panelRect.left,
+      offY: e.clientY - panelRect.top,
+      wrapRect,
+    };
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener("pointermove", (e)=>{
+    if (!drag) return;
+    let x = e.clientX - drag.wrapRect.left - drag.offX;
+    let y = e.clientY - drag.wrapRect.top - drag.offY;
+    x = Math.max(0, Math.min(x, drag.wrapRect.width - panel.offsetWidth));
+    y = Math.max(0, Math.min(y, drag.wrapRect.height - panel.offsetHeight));
+    panel.style.left = x + "px";
+    panel.style.top = y + "px";
+  });
+  function endDrag(e){
+    if (drag) { try{ handle.releasePointerCapture(e.pointerId); }catch(err){} }
+    drag = null;
+  }
+  handle.addEventListener("pointerup", endDrag);
+  handle.addEventListener("pointercancel", endDrag);
+})();
+
+</script>
+</body>
+</html>

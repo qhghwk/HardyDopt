@@ -1,0 +1,52 @@
+{
+  "acetone":              { "density": 787,   "viscosity": 0.000151 },
+  "benzene":              { "density": 876,   "viscosity": 0.000288 },
+  "carbon disulfide":     { "density": 1265,  "viscosity": 0.000172 },
+  "carbon tetrachloride": { "density": 1590,  "viscosity": 0.000436 },
+  "castor oil":           { "density": 960,   "viscosity": 0.311    },
+  "chloroform":           { "density": 1470,  "viscosity": 0.000254 },
+  "decane":               { "density": 728,   "viscosity": 0.000411 },
+  "ether":                { "density": 715,   "viscosity": 0.000107 },
+  "ethyl alcohol":        { "density": 787,   "viscosity": 0.000524 },
+  "ethylene glycol":      { "density": 1100,  "viscosity": 0.00776  },
+  "glycerine":            { "density": 1263,  "viscosity": 0.455    },
+  "heptane":              { "density": 681,   "viscosity": 0.000180 },
+  "hexane":               { "density": 657,   "viscosity": 0.000142 },
+  "kerosene":             { "density": 823,   "viscosity": 0.000785 },
+  "linseed oil":          { "density": 930,   "viscosity": 0.0158   },
+  "mercury":              { "density": 13600, "viscosity": 0.000733 },
+  "methyl alcohol":       { "density": 789,   "viscosity": 0.000268 },
+  "octane":               { "density": 701,   "viscosity": 0.000244 },
+  "propane":              { "density": 495,   "viscosity": 0.0000527 },
+  "propyl alcohol":       { "density": 802,   "viscosity": 0.000920 },
+  "propylene":            { "density": 516,   "viscosity": 0.0000431 },
+  "propylene glycol":     { "density": 968,   "viscosity": 0.0201   },
+  "turpentine":           { "density": 870,   "viscosity": 0.000658 },
+  "water":                { "density": 1000,  "viscosity": 0.000426 },
+
+  "water (high pressure liquid)": {
+    "valid_range": { "T_C": [0, 200], "P_bar": [50, 200] },
+    "density":   { "form": "poly_T",  "T_unit": "C", "coeffs": [3.913e-6, -3.634e-3, -0.1008, 1005.76] },
+    "viscosity": { "form": "vogel",   "T_unit": "K", "A": -10.5824, "B": 561.65, "C": 140.5 }
+  },
+
+  "CITGO ISO VG 32 hydraulic oil": {
+    "valid_range": { "T_C": [4.44, 48.89], "P_bar": [1, 1] },
+    "density":   { "form": "poly_T", "T_unit": "C", "coeffs": [-0.6510, 879.404] },
+    "viscosity": { "form": "vogel",  "T_unit": "K", "A": -9.9805, "B": 943.47, "C": 166.0 }
+  },
+
+  "hydrogen": {
+    "valid_range": { "T_C": [0, 200], "P_bar": [1.013, 500] },
+    "density": {
+      "form": "virial_TP",
+      "M_kg_per_mol": 2.016e-3,
+      "R": 8.314,
+      "Z_coeffs": { "P": 6.456e-4, "P2": 9.149e-8, "PT": -1.748e-6, "P2T": -5.411e-10, "PT2": 3.151e-9 }
+    },
+    "viscosity": {
+      "form": "power_T_exp_P", "T_unit": "K",
+      "A": 3.539e-7, "n": 0.5666, "alpha_P": 2.64e-4
+    }
+  }
+}

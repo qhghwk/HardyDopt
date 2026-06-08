@@ -1,0 +1,37 @@
+{
+  "base": { "b": 0.03 },
+  "fittings": { "default": { "F": 0.010, "b": 0.002 } },
+  "valves": { "default": { "F": 0.030, "b": 0.008 } },
+
+  "pump_power_class": {
+    "small": {
+      "power_kW_range": [0, 5],
+      "F": 0.10,
+      "b": 0.010
+    },
+
+    "medium": {
+      "power_kW_range": [5, 30],
+      "F": 0.25,
+      "b": 0.020
+    },
+
+    "large": {
+      "power_kW_range": [30, 100000],
+      "F": 0.50,
+      "b": 0.040
+    }
+  },
+
+  "height_factor": {
+    "0_10m":     { "F": 0.000, "b": 0.000 },
+    "10_30m":    { "F": 0.050, "b": 0.005 },
+    "30_60m":    { "F": 0.100, "b": 0.012 },
+    "60_100m":   { "F": 0.180, "b": 0.020 },
+    "100m_plus": { "F": 0.280, "b": 0.035 }
+  },
+  "calculation": {
+    "F_total_formula": "sum(component_F) * pump_count_multiplier",
+    "b_total_formula": "(base_b + sum(component_b)) * pump_count_multiplier"
+  }
+}

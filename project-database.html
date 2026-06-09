@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Project Database — Hardy-Cross 설계 결과</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#f3f4f6; --panel:#ffffff; --panel2:#eef1f4; --line:#d8dce1;
@@ -17,7 +18,8 @@
   header button:hover{border-color:var(--accent);}
   main{max-width:1180px; margin:0 auto; padding:16px;}
   .section{background:var(--panel); border:1px solid var(--line); border-radius:10px; margin-bottom:18px; overflow:hidden;}
-  .section .head{font-size:14px; font-weight:700; color:#fff; background:var(--accent2); padding:10px 16px;}
+  .section .head{font-size:14px; font-weight:700; color:#fff; background:var(--accent2); padding:10px 16px; display:flex; align-items:center; justify-content:space-between;}
+  .section .head.s0{background:#37474f;}
   .section .head.s2{background:#00897b;}
   .section .head.s3{background:#6a4fb6;}
   .section .head.s4{background:#d4860b;}
@@ -45,6 +47,15 @@
   #nominal-hc-result{margin-top:12px; padding:10px 12px; background:#f0f7f0; border:1px solid #b2dfdb; border-radius:8px; display:none; font-size:12px;}
   .cost-total-row td{font-weight:700; background:#e8f5e9;}
   .cost-nom-row td{background:#fff8e1;}
+  /* 차트 레이아웃 */
+  .chart-row{display:flex; gap:14px; margin-top:16px; flex-wrap:wrap;}
+  .chart-box{flex:1; min-width:260px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:12px;}
+  .chart-box.wide{flex:2 1 100%;}
+  .chart-box canvas{max-height:260px !important;}
+  .chart-title{font-size:12px; font-weight:700; color:var(--accent2); margin-bottom:8px;}
+  /* 다이어그램 캔버스 */
+  #diagramWrap{width:100%; height:420px; border:1px solid var(--line); border-radius:8px; background:#fafbfc; position:relative; overflow:hidden;}
+  #diagramCanvas{position:absolute; top:0; left:0;}
 </style>
 </head>
 <body>
@@ -59,7 +70,7 @@
 
 <script src="solver-module.js?v=4"></script>
 <script>
-/* NPS (Nominal Pipe Size) 표준 내경 목록 [mm] — 1/8"~48" */
+/* NPS (Nominal Pipe Size) 표준 내경 목록 [mm] */
 const NPS_MM = [
   3.175, 6.35, 9.525, 12.7, 19.05, 25.4, 31.75, 38.1, 50.8, 63.5,
   76.2, 88.9, 101.6, 127.0, 152.4, 203.2, 254.0, 304.8,
@@ -76,8 +87,7 @@ const content = document.getElementById("content");
 
 if (!raw) {
   content.innerHTML = `<div class="section"><div class="body">
-    <div class="empty">표시할 데이터가 없습니다. 설계 화면에서 <b>📂 Project Database</b> 버튼을 눌러 이동해주세요
-    (Hardy-Cross 계산을 실행하지 않아도 현재까지 입력한 내용을 바로 확인할 수 있습니다).</div>
+    <div class="empty">표시할 데이터가 없습니다. 설계 화면에서 <b>📂 Project Database</b> 버튼을 눌러 이동해주세요.</div>
   </div></div>`;
 } else {
   const db = JSON.parse(raw);
@@ -94,10 +104,9 @@ function closestNPS(D_m) {
   const D_mm = D_m * 1000;
   let best = NPS_MM[0], bd = Infinity;
   for (const mm of NPS_MM) { const d = Math.abs(mm - D_mm); if (d < bd) { bd = d; best = mm; } }
-  return best; // mm
+  return best;
 }
 
-/* Colebrook 마찰계수 (로컬 버전 — SolverModule 없이도 동작) */
 function colebrookLocal(Re, epsD) {
   if (!isFinite(Re) || Re <= 0) return NaN;
   if (Re < 2300) return 64 / Re;
@@ -110,7 +119,6 @@ function colebrookLocal(Re, epsD) {
   return f;
 }
 
-/* 배관 마찰+부속 수두 [m] */
 function pipeHloss(Q_m3s, D_m, L_m, eps_mm, fittingsK_arr, rho, mu) {
   if (!Q_m3s || !D_m || D_m <= 0) return 0;
   const eps_m = (eps_mm != null && isFinite(eps_mm) ? eps_mm : 0.045) / 1000;
@@ -123,17 +131,216 @@ function pipeHloss(Q_m3s, D_m, L_m, eps_mm, fittingsK_arr, rho, mu) {
   return (f * L_m / D_m + sumK) * v * v / (2 * g);
 }
 
+/* 배관별 비용 계산 (섹션4 + 차트 공유) */
+function computePipeCosts(db) {
+  const gp = db.globalParams || {};
+  const rho = gp.rho, mu = gp.mu, C2 = gp.C2, t = gp.t, eta = gp.eta;
+  const a = (window.SolverModule && SolverModule.calcCRF) ? SolverModule.calcCRF(gp.i, gp.n) : null;
+  const g = 9.81;
+  return db.pipes.map(p => {
+    const noQD = (p.D == null || !isFinite(p.D) || p.Q == null || !isFinite(p.Q));
+    const D = noQD ? null : +p.D;
+    const Q = noQD ? null : +p.Q;
+    const L = +p.length;
+    const c1 = p.c1Applied, nexp = p.nExpApplied, b = p.bApplied, F = p.FApplied;
+    const D_nom = D != null ? closestNPS(D) / 1000 : null;
+
+    const capOpt = (D != null && a != null && isFinite(c1) && isFinite(nexp) && isFinite(b) && isFinite(F))
+      ? (a + b) * (1 + F) * c1 * Math.pow(D, nexp) * L : null;
+    const capNom = (D_nom != null && a != null && isFinite(c1) && isFinite(nexp) && isFinite(b) && isFinite(F))
+      ? (a + b) * (1 + F) * c1 * Math.pow(D_nom, nexp) * L : null;
+
+    const H_opt = (p.H_total != null && isFinite(p.H_total)) ? p.H_total : null;
+    const elevD = (p.elevDiff != null && isFinite(p.elevDiff)) ? p.elevDiff : 0;
+    const hlossNom = (Q != null && D_nom != null && isFinite(rho) && isFinite(mu))
+      ? pipeHloss(Q, D_nom, L, p.eps, p.fittingsK, rho, mu) : null;
+    const H_nom = hlossNom != null ? elevD + hlossNom : null;
+
+    const engOpt = (Q != null && H_opt != null && isFinite(C2) && isFinite(t) && isFinite(rho) && isFinite(eta))
+      ? C2 * t * rho * g * Math.abs(Q) * H_opt / eta / 1000 : null;
+    const engNom = (Q != null && H_nom != null && isFinite(C2) && isFinite(t) && isFinite(rho) && isFinite(eta))
+      ? C2 * t * rho * g * Math.abs(Q) * H_nom / eta / 1000 : null;
+
+    return { p, D, Q, D_nom, capOpt, capNom, engOpt, engNom,
+      totOpt: (capOpt != null && engOpt != null) ? capOpt + engOpt : null,
+      totNom: (capNom != null && engNom != null) ? capNom + engNom : null };
+  });
+}
+
 /* ── 메인 렌더 ── */
 function render(db){
   content.innerHTML = `
+    ${sectionDiagram(db)}
     ${section1(db)}
     ${section2(db)}
     ${section3(db)}
     ${section4Total(db)}
     ${section5Shell(db)}
   `;
+  drawDiagram(db);
+  drawSection2Charts(db);
+  drawSection3Charts(db);
+  drawSection4Charts(db);
   initNominalSection(db);
   initPumpSection(db);
+}
+
+/* ============================================================
+   ⓪ 배관망 다이어그램
+   ============================================================ */
+function sectionDiagram(db) {
+  return `<div class="section">
+    <div class="head s0">⓪ 배관망 다이어그램 — 최종 유량 · 최적 직경 표시</div>
+    <div class="body">
+      <div id="diagramWrap"><canvas id="diagramCanvas"></canvas></div>
+      <div class="hint">배관 위: 유량 Q [m³/h] / D_opt [mm] / NPS [mm] · 노드: 번호 · 높이(m) · 파란 원 = 일반 노드, 보라 원 = 펌프 · 주황 화살표 = 외부 유출입</div>
+    </div>
+  </div>`;
+}
+
+function drawDiagram(db) {
+  const dsRaw = sessionStorage.getItem("designState");
+  const wrap = document.getElementById("diagramWrap");
+  const canvas = document.getElementById("diagramCanvas");
+  if (!wrap || !canvas) return;
+
+  const W = wrap.offsetWidth || 800;
+  const H = wrap.offsetHeight || 420;
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, W, H);
+
+  if (!dsRaw) {
+    ctx.fillStyle = "#9aa0a6"; ctx.font = "13px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("설계 상태 데이터 없음 — 설계 화면에서 Project Database로 이동해주세요.", W/2, H/2);
+    return;
+  }
+
+  const state = JSON.parse(dsRaw).canvas;
+  if (!state || !state.nodes || !state.nodes.length) {
+    ctx.fillStyle = "#9aa0a6"; ctx.font = "13px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("노드 데이터 없음", W/2, H/2);
+    return;
+  }
+
+  /* 좌표 변환 — 전체 노드 포함 bounding box */
+  const xs = state.nodes.map(n => n.x), ys = state.nodes.map(n => n.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const padX = 90, padY = 60;
+  const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1;
+  const scaleX = (W - padX * 2) / rangeX;
+  const scaleY = (H - padY * 2) / rangeY;
+  const scale  = Math.min(scaleX, scaleY);
+  const ox = padX + ((W - padX*2) - rangeX * scale) / 2 - minX * scale;
+  const oy = padY + ((H - padY*2) - rangeY * scale) / 2 - minY * scale;
+  const tx = x => x * scale + ox;
+  const ty = y => y * scale + oy;
+
+  /* 배관 */
+  (state.pipes || []).forEach(p => {
+    const a = state.nodes.find(n => n.id === p.from);
+    const b = state.nodes.find(n => n.id === p.to);
+    if (!a || !b) return;
+    const dbp = db.pipes.find(dp => dp.id === p.id);
+
+    const ax = tx(a.x), ay = ty(a.y), bx = tx(b.x), by = ty(b.y);
+    const ang = Math.atan2(by - ay, bx - ax);
+    const mx = (ax + bx) / 2, my = (ay + by) / 2;
+
+    /* 선 */
+    ctx.strokeStyle = "#1976d2"; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+
+    /* 화살촉 (중간) */
+    ctx.save();
+    ctx.translate(mx, my); ctx.rotate(ang);
+    ctx.fillStyle = "#1976d2";
+    ctx.beginPath(); ctx.moveTo(9,0); ctx.lineTo(-5,-5); ctx.lineTo(-5,5); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    /* 레이블 — 배관 수직 방향으로 오프셋 */
+    const nx = Math.cos(ang + Math.PI/2), ny = Math.sin(ang + Math.PI/2);
+    const lx = mx + nx * 18, ly = my + ny * 18;
+    ctx.save();
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "bold 9px sans-serif"; ctx.fillStyle = "#37474f";
+    ctx.fillText(`P${p.id}`, lx, ly - 14);
+    if (dbp) {
+      if (dbp.Q != null) {
+        const qh = (Math.abs(dbp.Q) * 3600).toFixed(3);
+        const sign = dbp.Q < 0 ? "↩" : "→";
+        ctx.fillStyle = "#1976d2"; ctx.font = "9px sans-serif";
+        ctx.fillText(`${sign} Q: ${qh} m³/h`, lx, ly - 3);
+      }
+      if (dbp.D != null) {
+        const dOpt = (dbp.D * 1000).toFixed(1);
+        const dNps = closestNPS(dbp.D).toFixed(1);
+        ctx.fillStyle = "#00897b"; ctx.font = "9px sans-serif";
+        ctx.fillText(`D: ${dOpt} / NPS: ${dNps} mm`, lx, ly + 9);
+      }
+    }
+    ctx.restore();
+  });
+
+  /* 화살표 (외부 유출입) */
+  (state.arrows || []).forEach(ar => {
+    const n = state.nodes.find(x => x.id === ar.nodeId);
+    const pump = ar.pumpNodeId ? state.nodes.find(x => x.id === ar.pumpNodeId) : null;
+    if (!n) return;
+
+    let ax2, ay2, bx2, by2;
+    if (pump) {
+      ax2 = tx(pump.x); ay2 = ty(pump.y);
+      bx2 = tx(n.x);   by2 = ty(n.y);
+    } else {
+      const ang2 = ar.angle || 0;
+      const len  = 48 * scale;
+      ax2 = tx(n.x) - Math.cos(ang2) * len;
+      ay2 = ty(n.y) - Math.sin(ang2) * len;
+      bx2 = tx(n.x); by2 = ty(n.y);
+    }
+
+    const ang3 = Math.atan2(by2 - ay2, bx2 - ax2);
+    ctx.strokeStyle = "#ce9178"; ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(ax2, ay2); ctx.lineTo(bx2, by2); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.save();
+    ctx.translate(bx2 - Math.cos(ang3)*14, by2 - Math.sin(ang3)*14);
+    ctx.rotate(ang3);
+    ctx.fillStyle = "#ce9178";
+    ctx.beginPath(); ctx.moveTo(8,0); ctx.lineTo(-5,-5); ctx.lineTo(-5,5); ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    const mx2 = (ax2+bx2)/2, my2 = (ay2+by2)/2;
+    ctx.fillStyle = "#ce9178"; ctx.font = "9px sans-serif";
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.fillText(`A${ar.id} Q${ar.flow >= 0 ? '+' : ''}${ar.flow ?? 0}`, mx2+4, my2-4);
+  });
+
+  /* 노드 */
+  (state.nodes || []).forEach(n => {
+    const nx2 = tx(n.x), ny2 = ty(n.y);
+    ctx.beginPath(); ctx.arc(nx2, ny2, 12, 0, Math.PI*2);
+    ctx.fillStyle = n.isPump ? "#5e35b1" : "#1976d2";
+    ctx.fill();
+    ctx.strokeStyle = "#37474f"; ctx.lineWidth = 1.5; ctx.stroke();
+
+    if (n.isPump) {
+      ctx.fillStyle = "#fff"; ctx.font = "13px sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("⚙", nx2, ny2 + 1);
+    }
+    ctx.fillStyle = "#37474f"; ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.fillText(`N${n.id}`, nx2 + 15, ny2 + 1);
+    ctx.font = "10px sans-serif"; ctx.fillStyle = "#5b6168";
+    ctx.fillText(`h=${n.height}m`, nx2 + 15, ny2 + 12);
+  });
 }
 
 /* ============================================================
@@ -156,18 +363,19 @@ function section1(db){
   return `<div class="section">
     <div class="head">① 공식 계수 — 배관망 내 배관들에 부여된 관련 계수들</div>
     <div class="body">
-      <p class="desc">각 배관의 Doptimization 계산식(분모: L·n·(a_crf+b)·(1+F)·C₁·η·π²·ρ²)에 들어가는 배관별 계수입니다.
-      C₁·n은 사용자가 직접 입력하지 않으면 기본값(C₁=${fmt(D.C1,2)}, n=${fmt(D.n_exp,2)})이, b·F는 caculbF.json이 있으면 배관별 계산값(없으면 b=${fmt(D.b,4)}, F=${fmt(D.F,4)})이 적용됩니다.</p>
+      <p class="desc">각 배관의 Doptimization 계산식에 들어가는 배관별 계수입니다.
+      C₁·n은 사용자가 직접 입력하지 않으면 기본값(C₁=${fmt(D.C1,2)}, n=${fmt(D.n_exp,2)})이,
+      b·F는 caculbF.json이 있으면 배관별 계산값(없으면 b=${fmt(D.b,4)}, F=${fmt(D.F,4)})이 적용됩니다.</p>
       <table><tr><th>배관</th><th>길이</th><th>재질/조도</th><th>부속·밸브(K)</th><th>적용 C₁</th><th>적용 n</th><th>적용 b</th><th>적용 F</th></tr>${rows}</table>
       <div class="hint">전역 입력값 — ρ=${fmt(gp.rho,2)} kg/m³, μ=${gp.mu!=null?(+gp.mu).toExponential(3):'-'} Pa·s,
       C₂=${fmt(gp.C2,3)}, t=${fmt(gp.t,1)} h/yr, η=${fmt(gp.eta,3)}, i=${fmt(gp.i,3)}%, n=${fmt(gp.n,1)}년
-      ${db.bfSummary ? ` · caculbF.json 전역 성분: b=${fmt(db.bfSummary.b_total,4)}, F=${fmt(db.bfSummary.F_total,4)} (구성요소 ${db.bfSummary.count}개)` : ' · caculbF.json 미로드 — 고정 기본값 사용'}</div>
+      ${db.bfSummary ? ` · caculbF.json: b=${fmt(db.bfSummary.b_total,4)}, F=${fmt(db.bfSummary.F_total,4)}` : ' · caculbF.json 미로드'}</div>
     </div>
   </div>`;
 }
 
 /* ============================================================
-   ② Hardy-Cross 수행 결과 + Nominal 전환
+   ② Hardy-Cross 수행 결과 + 차트
    ============================================================ */
 function section2(db){
   let rows = db.pipes.map(p => `
@@ -182,7 +390,7 @@ function section2(db){
   return `<div class="section">
     <div class="head s2">② Hardy-Cross Method 수행 결과 — 유량 · 최적 직경 · Nominal 전환</div>
     <div class="body">
-      <p class="desc">Hardy-Cross 루프 보정으로 수렴된 각 배관의 유량 Qᵢ와 최적 직경 Dᵢ = D_opt(Qᵢ)입니다. <b>Nominal 전환</b>을 누르면 각 D_opt에 가장 가까운 표준 NPS 내경을 표시합니다.</p>
+      <p class="desc">Hardy-Cross 루프 보정으로 수렴된 각 배관의 유량 Qᵢ와 최적 직경 Dᵢ = D_opt(Qᵢ)입니다.</p>
       <table>
         <tr><th>배관</th><th>유량 Q</th><th>D_opt</th><th>Closest NPS</th><th>차이 (mm)</th><th>비고</th></tr>
         ${rows}
@@ -194,13 +402,65 @@ function section2(db){
       <div id="nominal-hc-result"></div>
       <div class="hint">${db.hasSolveResult
         ? `수렴 ${db.converged ? '✓' : '⚠️ 미수렴'} (반복 ${db.iterations}회, 루프 ${db.loops}개) · 총 외부 유출량 Q_out=${db.Q_out_m3h!=null?(+db.Q_out_m3h).toFixed(2):'-'} m³/h`
-        : `⏳ 아직 'Hardy-Cross 계산'을 실행하지 않았습니다 — 설계 화면에서 먼저 계산하세요.`}</div>
+        : `⏳ 아직 'Hardy-Cross 계산'을 실행하지 않았습니다.`}</div>
+      <!-- 차트 -->
+      <div class="chart-row">
+        <div class="chart-box">
+          <div class="chart-title">배관별 유량 Q [m³/h]</div>
+          <canvas id="chart-q"></canvas>
+        </div>
+        <div class="chart-box">
+          <div class="chart-title">D_opt vs NPS 직경 비교 [mm]</div>
+          <canvas id="chart-d"></canvas>
+        </div>
+      </div>
     </div>
   </div>`;
 }
 
+function drawSection2Charts(db) {
+  const labels = db.pipes.map(p => `P${p.id}\nN${p.from}→N${p.to}`);
+  const C2 = { responsive: true, maintainAspectRatio: true, plugins: { legend: { position:'bottom', labels:{font:{size:10}} } }, scales: { x:{ ticks:{font:{size:10}} }, y:{ ticks:{font:{size:10}} } } };
+
+  /* Q 차트 */
+  const qVals = db.pipes.map(p => p.Q != null ? Math.abs(p.Q) * 3600 : null);
+  const elQ = document.getElementById("chart-q");
+  if (elQ) {
+    new Chart(elQ, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{ label: "|Q| m³/h", data: qVals,
+          backgroundColor: qVals.map((v,i) => db.pipes[i].Q < 0 ? "#ef6c00bb" : "#1976d2bb"),
+          borderColor:      qVals.map((v,i) => db.pipes[i].Q < 0 ? "#ef6c00" : "#1976d2"),
+          borderWidth: 1 }]
+      },
+      options: { ...C2, plugins: { ...C2.plugins,
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.raw?.toFixed(4)} m³/h` } } } }
+    });
+  }
+
+  /* D 비교 차트 */
+  const dOpt = db.pipes.map(p => p.D != null ? +(p.D * 1000).toFixed(3) : null);
+  const dNps = db.pipes.map(p => p.D != null ? closestNPS(p.D) : null);
+  const elD = document.getElementById("chart-d");
+  if (elD) {
+    new Chart(elD, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          { label: "D_opt (mm)", data: dOpt, backgroundColor: "#00897bbb", borderColor: "#00897b", borderWidth: 1 },
+          { label: "NPS (mm)",   data: dNps, backgroundColor: "#ef6c00bb", borderColor: "#ef6c00", borderWidth: 1 }
+        ]
+      },
+      options: C2
+    });
+  }
+}
+
 /* ============================================================
-   ③ Diameter Dependence 평가
+   ③ Diameter Dependence + 차트
    ============================================================ */
 function section3(db){
   let rows = db.pipes.map(p => {
@@ -209,8 +469,6 @@ function section3(db){
       if (p.ratio >= 3)        pill = `<span class="pill bad">H_total ≫ 손실수두 — 직경 조절 효과 작음</span>`;
       else if (p.ratio >= 1.5) pill = `<span class="pill warn">H_total이 다소 우세 — 직경 영향 보통</span>`;
       else                     pill = `<span class="pill good">손실수두 비중 큼 — 직경 조절이 비용에 유효</span>`;
-    } else if (p.ratio === null && p.hLoss != null && p.hLoss <= 1e-12) {
-      pill = `<span class="pill bad">손실수두 ≈ 0 — 직경 영향 거의 없음</span>`;
     }
     return `<tr>
       <td>P${p.id} (N${p.from}→N${p.to})</td>
@@ -219,112 +477,124 @@ function section3(db){
       <td>${fmt(p.hLoss, 4)} m</td>
       <td>${fmt(p.elevDiff, 3)} m</td>
       <td>${fmt(p.H_total, 4)} m</td>
-      <td>${p.ratio!=null && isFinite(p.ratio) ? fmt(p.ratio,3) : (p.ratio===null && p.hLoss<=1e-12 ? '∞' : '-')}</td>
+      <td>${p.ratio!=null && isFinite(p.ratio) ? fmt(p.ratio,3) : '-'}</td>
       <td>${pill}</td>
     </tr>`;
   }).join("");
   return `<div class="section">
     <div class="head s3">③ Diameter Dependence 평가</div>
     <div class="body">
-      <p class="desc">노드 높이차는 D_opt 공식 유도 시 사라지므로 직경 선택에 영향을 주지 않습니다. <b>비율 H_total / (h_f+h_m)</b>이 클수록 마찰손실의 비중이 작아져 직경 조절의 비용 절감 효과가 줄어듭니다.</p>
+      <p class="desc">비율 H_total / (h_f+h_m)이 클수록 마찰손실의 비중이 작아져 직경 조절의 비용 절감 효과가 줄어듭니다.</p>
       <table><tr><th>배관</th><th>major loss h_f</th><th>minor loss h_m</th><th>손실수두 합</th><th>양 끝 높이차</th><th>H_total</th><th>H_total / 손실수두</th><th>평가</th></tr>${rows}</table>
-      <div class="hint">평가 기준 — 비율 &lt; 1.5: 손실수두 비중이 커서 직경 선택이 비용에 유효 / 1.5~3: 보통 / ≥ 3: 정수두 지배적, 직경 조절 효과 작음 (참고용 추정치)</div>
+      <div class="hint">평가 기준 — 비율 &lt; 1.5: 유효 / 1.5~3: 보통 / ≥ 3: 정수두 지배적, 직경 조절 효과 작음</div>
+      <!-- 차트 -->
+      <div class="chart-row">
+        <div class="chart-box">
+          <div class="chart-title">배관별 수두 성분 [m]</div>
+          <canvas id="chart-losses"></canvas>
+        </div>
+        <div class="chart-box">
+          <div class="chart-title">H_total / 손실수두 비율</div>
+          <canvas id="chart-ratio"></canvas>
+        </div>
+      </div>
     </div>
   </div>`;
 }
 
+function drawSection3Charts(db) {
+  const labels = db.pipes.map(p => `P${p.id}`);
+  const C3 = { responsive: true, maintainAspectRatio: true, plugins:{ legend:{ position:'bottom', labels:{font:{size:10}} } }, scales:{ x:{ticks:{font:{size:10}}}, y:{ticks:{font:{size:10}}, beginAtZero:true} } };
+
+  /* 수두 성분 스택 차트 */
+  const elL = document.getElementById("chart-losses");
+  if (elL) {
+    new Chart(elL, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          { label: "major loss h_f [m]", data: db.pipes.map(p => p.hf ?? 0),  backgroundColor: "#1976d2bb", stack: "s" },
+          { label: "minor loss h_m [m]", data: db.pipes.map(p => p.hm ?? 0),  backgroundColor: "#00897bbb", stack: "s" },
+          { label: "높이차 (양수) [m]",  data: db.pipes.map(p => p.elevDiff != null ? Math.max(0, p.elevDiff) : 0), backgroundColor: "#ef6c00bb", stack: "s" }
+        ]
+      },
+      options: { ...C3, scales:{ x:{stacked:true,ticks:{font:{size:10}}}, y:{stacked:true,beginAtZero:true,ticks:{font:{size:10}}} } }
+    });
+  }
+
+  /* 비율 차트 */
+  const elR = document.getElementById("chart-ratio");
+  if (elR) {
+    const ratios = db.pipes.map(p => p.ratio != null && isFinite(p.ratio) ? +p.ratio.toFixed(3) : null);
+    const bgColors = db.pipes.map(p => {
+      if (!p.ratio || !isFinite(p.ratio)) return "#9aa0a6bb";
+      return p.ratio >= 3 ? "#d32f2fbb" : p.ratio >= 1.5 ? "#ef6c00bb" : "#2e7d32bb";
+    });
+    new Chart(elR, {
+      type: "bar",
+      data: { labels, datasets:[{ label:"H_total / 손실수두", data: ratios, backgroundColor: bgColors, borderWidth:1 }] },
+      options: { ...C3,
+        plugins: { ...C3.plugins,
+          annotation: undefined  // chartjs-plugin-annotation 없으면 생략
+        }
+      }
+    });
+    /* 기준선 직접 그리기 (annotation 플러그인 없이) */
+    elR.dataset.thresholds = "1.5,3";
+  }
+}
+
 /* ============================================================
-   ④ Total Cost
-   연간 비용 = 자본 회수 + 에너지
-   자본 회수 (배관 i) = (a + b_i)·(1+F_i)·C1_i·D_i^n_i·L_i  [currency/yr]
-   에너지 (배관 i 기여) = C2·t·ρg|Q_i|H_total_i/η / 1000    [currency/yr]
+   ④ Total Cost + 차트
    ============================================================ */
 function section4Total(db){
   const gp = db.globalParams || {};
-  const rho = gp.rho, mu = gp.mu, C2 = gp.C2, t = gp.t, eta = gp.eta;
   const a = (window.SolverModule && SolverModule.calcCRF) ? SolverModule.calcCRF(gp.i, gp.n) : null;
-  const g = 9.81;
+  const fmtC = v => (v != null && isFinite(v)) ? v.toLocaleString(undefined,{maximumFractionDigits:1}) : "-";
+  const costs = computePipeCosts(db);
 
-  /* 입력 부족 항목 경고 (섹션은 항상 표시) */
+  let totalCapOpt=0, totalCapNom=0, totalEngOpt=0, totalEngNom=0;
+
   const missing = [];
-  if (!isFinite(rho)) missing.push("ρ");
-  if (!isFinite(mu))  missing.push("μ");
-  if (!isFinite(C2))  missing.push("C₂(전기요금)");
-  if (!isFinite(t))   missing.push("t(운영시간)");
-  if (!isFinite(eta)) missing.push("η(효율)");
-  if (a == null)      missing.push("a_CRF(이자율·상환기간)");
+  const gp2 = db.globalParams||{};
+  if (!isFinite(gp2.rho)) missing.push("ρ");
+  if (!isFinite(gp2.mu))  missing.push("μ");
+  if (!isFinite(gp2.C2))  missing.push("C₂");
+  if (!isFinite(gp2.t))   missing.push("t");
+  if (!isFinite(gp2.eta)) missing.push("η");
+  if (a == null)           missing.push("a_CRF");
   const warnHtml = missing.length
     ? `<div style="padding:6px 10px; background:#fff3e0; border-radius:6px; font-size:11px; color:#bf360c; margin-bottom:10px;">
-        ⚠ 입력 부족 — ${missing.join(", ")} 가 없어 해당 항목은 "-"로 표시됩니다. 설계 화면에서 전역 매개변수를 채우고 Project Database를 다시 여세요.
-       </div>` : "";
+        ⚠ 입력 부족 — ${missing.join(", ")} 가 없어 해당 항목은 "-"로 표시됩니다.</div>` : "";
 
-  const fmtC = v => (v != null && isFinite(v)) ? v.toLocaleString(undefined,{maximumFractionDigits:1}) : "-";
-  let totalCapOpt = 0, totalCapNom = 0, totalEngOpt = 0, totalEngNom = 0;
-  let hasAnyResult = false;
-
-  const rows = db.pipes.map(p => {
-    const noQD = (p.D == null || !isFinite(p.D) || p.Q == null || !isFinite(p.Q));
-    const D      = noQD ? null : +p.D;
-    const Q      = noQD ? null : +p.Q;
-    const L      = +p.length;
-    const c1     = p.c1Applied, nexp = p.nExpApplied, b = p.bApplied, F = p.FApplied;
-    const D_nom_mm = D != null ? closestNPS(D) : null;
-    const D_nom    = D_nom_mm != null ? D_nom_mm / 1000 : null;
-
-    /* 자본 회수 */
-    const capOpt = (D != null && a != null && isFinite(c1) && isFinite(nexp) && isFinite(b) && isFinite(F))
-      ? (a + b) * (1 + F) * c1 * Math.pow(D, nexp) * L : null;
-    const capNom = (D_nom != null && a != null && isFinite(c1) && isFinite(nexp) && isFinite(b) && isFinite(F))
-      ? (a + b) * (1 + F) * c1 * Math.pow(D_nom, nexp) * L : null;
-
-    /* 에너지 */
-    const H_opt = (p.H_total != null && isFinite(p.H_total)) ? p.H_total : null;
-    const elevD = (p.elevDiff != null && isFinite(p.elevDiff)) ? p.elevDiff : 0;
-    const hlossNom = (Q != null && D_nom != null && isFinite(rho) && isFinite(mu))
-      ? pipeHloss(Q, D_nom, L, p.eps, p.fittingsK, rho, mu) : null;
-    const H_nom = (hlossNom != null) ? elevD + hlossNom : null;
-
-    const engOpt = (Q != null && H_opt != null && isFinite(C2) && isFinite(t) && isFinite(rho) && isFinite(eta))
-      ? C2 * t * rho * g * Math.abs(Q) * H_opt / eta / 1000 : null;
-    const engNom = (Q != null && H_nom != null && isFinite(C2) && isFinite(t) && isFinite(rho) && isFinite(eta))
-      ? C2 * t * rho * g * Math.abs(Q) * H_nom / eta / 1000 : null;
-
-    const totPipeOpt = (capOpt != null && engOpt != null) ? capOpt + engOpt : null;
-    const totPipeNom = (capNom != null && engNom != null) ? capNom + engNom : null;
-    const diffTotal  = (totPipeOpt != null && totPipeNom != null) ? totPipeNom - totPipeOpt : null;
-
-    if (capOpt  != null) { totalCapOpt += capOpt;  hasAnyResult = true; }
-    if (capNom  != null) totalCapNom += capNom;
-    if (engOpt  != null) totalEngOpt += engOpt;
-    if (engNom  != null) totalEngNom += engNom;
-
+  const rows = costs.map(({ p, D, D_nom, capOpt, capNom, engOpt, engNom, totOpt, totNom }) => {
+    const D_nom_mm = D_nom != null ? D_nom * 1000 : null;
+    const diffTotal = (totOpt != null && totNom != null) ? totNom - totOpt : null;
     const diffClass = diffTotal == null ? "" : diffTotal > 0 ? "nom-up" : diffTotal < 0 ? "nom-dn" : "";
-
+    if (capOpt != null) totalCapOpt += capOpt;
+    if (capNom != null) totalCapNom += capNom;
+    if (engOpt != null) totalEngOpt += engOpt;
+    if (engNom != null) totalEngNom += engNom;
     return `<tr>
       <td>P${p.id} (N${p.from}→N${p.to})</td>
       <td>${D != null ? (D*1000).toFixed(2) : "-"}</td>
-      <td>${fmtC(capOpt)}</td>
-      <td>${fmtC(engOpt)}</td>
-      <td><b>${fmtC(totPipeOpt)}</b></td>
+      <td>${fmtC(capOpt)}</td><td>${fmtC(engOpt)}</td><td><b>${fmtC(totOpt)}</b></td>
       <td>${D_nom_mm != null ? D_nom_mm.toFixed(2) : "-"}</td>
-      <td>${fmtC(capNom)}</td>
-      <td>${fmtC(engNom)}</td>
-      <td><b>${fmtC(totPipeNom)}</b></td>
+      <td>${fmtC(capNom)}</td><td>${fmtC(engNom)}</td><td><b>${fmtC(totNom)}</b></td>
       <td class="${diffClass}">${diffTotal != null ? (diffTotal >= 0 ? "+" : "") + fmtC(diffTotal) : "-"}</td>
     </tr>`;
   }).join("");
 
-  const totOpt  = totalCapOpt + totalEngOpt;
-  const totNom  = totalCapNom + totalEngNom;
+  const totOpt = totalCapOpt + totalEngOpt;
+  const totNom = totalCapNom + totalEngNom;
   const totDiff = totNom - totOpt;
-  const fmtCG   = v => isFinite(v) ? v.toLocaleString(undefined,{maximumFractionDigits:1}) : "-";
+  const fmtCG = v => isFinite(v) ? v.toLocaleString(undefined,{maximumFractionDigits:1}) : "-";
 
   return `<div class="section">
     <div class="head s4">④ Total Cost — 연간 비용 비교 (D_opt vs Closest NPS)</div>
     <div class="body">
-      <p class="desc">연간 비용 = 자본회수 (a+b)·(1+F)·C₁·Dⁿ·L + 에너지 C₂·t·ρgQH/η/1000 를 배관별로 계산합니다.
-      Nominal 에너지는 NPS 내경으로 마찰손실을 재계산한 H_total을 사용합니다. Q는 D_opt 기준 Hardy-Cross 결과와 동일하게 적용됩니다
-      (Nominal로 Hardy-Cross 재실행 후 ② 섹션에 결과가 표시되면 해당 Q 기반으로 별도 확인 가능합니다).</p>
+      <p class="desc">연간 비용 = 자본회수 (a+b)·(1+F)·C₁·Dⁿ·L + 에너지 C₂·t·ρgQH/η/1000 를 배관별로 계산합니다.</p>
       ${warnHtml}
       <div style="overflow-x:auto">
       <table>
@@ -346,22 +616,66 @@ function section4Total(db){
         </tr>
         ${rows}
         <tr class="cost-total-row">
-          <td>합계</td>
+          <td>합계</td><td>-</td>
+          <td>${fmtCG(totalCapOpt)}</td><td>${fmtCG(totalEngOpt)}</td><td>${fmtCG(totOpt)}</td>
           <td>-</td>
-          <td>${fmtCG(totalCapOpt)}</td>
-          <td>${fmtCG(totalEngOpt)}</td>
-          <td>${fmtCG(totOpt)}</td>
-          <td>-</td>
-          <td>${fmtCG(totalCapNom)}</td>
-          <td>${fmtCG(totalEngNom)}</td>
-          <td>${fmtCG(totNom)}</td>
+          <td>${fmtCG(totalCapNom)}</td><td>${fmtCG(totalEngNom)}</td><td>${fmtCG(totNom)}</td>
           <td class="${totDiff>0?'nom-up':totDiff<0?'nom-dn':''}">${totDiff>=0?'+':''}${fmtCG(totDiff)}</td>
         </tr>
       </table>
       </div>
-      <div class="hint">a(CRF)=${a!=null?a.toFixed(5):'-'} · C₂=${fmt(C2,3)} · t=${fmt(t,1)} h/yr · η=${fmt(eta,3)} · ρ=${fmt(rho,2)} kg/m³ · 에너지 H_total: D_opt는 ③과 동일, NPS는 Colebrook 재계산값</div>
+      <div class="hint">a(CRF)=${a!=null?a.toFixed(5):'-'} · C₂=${fmt(db.globalParams?.C2,3)} · t=${fmt(db.globalParams?.t,1)} h/yr · η=${fmt(db.globalParams?.eta,3)}</div>
+      <!-- 차트 -->
+      <div class="chart-row">
+        <div class="chart-box">
+          <div class="chart-title">배관별 D_opt 연간 비용 (자본 + 에너지) [currency/yr]</div>
+          <canvas id="chart-cost-opt"></canvas>
+        </div>
+        <div class="chart-box">
+          <div class="chart-title">D_opt vs NPS 총 연간 비용 비교 [currency/yr]</div>
+          <canvas id="chart-cost-compare"></canvas>
+        </div>
+      </div>
     </div>
   </div>`;
+}
+
+function drawSection4Charts(db) {
+  const costs = computePipeCosts(db);
+  const labels = db.pipes.map(p => `P${p.id}`);
+  const C4 = { responsive:true, maintainAspectRatio:true, plugins:{legend:{position:'bottom',labels:{font:{size:10}}}}, scales:{x:{ticks:{font:{size:10}}},y:{beginAtZero:true,ticks:{font:{size:10}}}} };
+
+  /* D_opt 자본 + 에너지 스택 */
+  const elOpt = document.getElementById("chart-cost-opt");
+  if (elOpt) {
+    new Chart(elOpt, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          { label: "자본 회수 (D_opt)", data: costs.map(c => c.capOpt), backgroundColor: "#1976d2bb", stack: "opt" },
+          { label: "에너지 (D_opt)",    data: costs.map(c => c.engOpt), backgroundColor: "#00897bbb", stack: "opt" }
+        ]
+      },
+      options: { ...C4, scales:{ x:{stacked:true,ticks:{font:{size:10}}}, y:{stacked:true,beginAtZero:true,ticks:{font:{size:10}}} } }
+    });
+  }
+
+  /* D_opt vs NPS 총비용 비교 */
+  const elCmp = document.getElementById("chart-cost-compare");
+  if (elCmp) {
+    new Chart(elCmp, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          { label: "D_opt 합계", data: costs.map(c => c.totOpt), backgroundColor: "#1976d2bb", borderColor: "#1976d2", borderWidth: 1 },
+          { label: "NPS 합계",   data: costs.map(c => c.totNom), backgroundColor: "#ef6c00bb", borderColor: "#ef6c00", borderWidth: 1 }
+        ]
+      },
+      options: C4
+    });
+  }
 }
 
 /* ============================================================
@@ -371,15 +685,14 @@ function section5Shell(db){
   if (!db.pumps || !db.pumps.length) {
     return `<div class="section">
       <div class="head s5">⑤ Pump 추천</div>
-      <div class="body"><div class="empty">설계도에서 양정을 계산할 수 있는 펌프가 없습니다.
-      (펌프 노드의 출력(kW)·연결(화살표=외부 펌프 또는 적용 배관 지정=내부 펌프)·관련 노드의 높이 입력을 확인해주세요.)</div></div>
+      <div class="body"><div class="empty">설계도에서 양정을 계산할 수 있는 펌프가 없습니다.</div></div>
     </div>`;
   }
   return `<div class="section">
     <div class="head s5">⑤ Pump 추천</div>
     <div class="body">
       <p class="desc">펌프의 BEP(Best Efficiency Point)는 H와 Q로 결정됩니다.
-      Hardy-Cross로 배관별 유량·최적 직경이 확정된 뒤 펌프별 H_total·Q·H_total×Q를 산출합니다.
+      Hardy-Cross로 배관별 유량·최적 직경이 확정된 뒤 펌프별 H_total·Q를 산출합니다.
       펌프의 개수와 타입을 선택하면 동원펌프 BEP 데이터(dongwonpump.json)와 비교해 가장 가까운 모델을 추천합니다.</p>
       <div id="pumpCards"></div>
       <div class="hint" id="pumpDbNote"></div>
@@ -388,7 +701,7 @@ function section5Shell(db){
 }
 
 /* ============================================================
-   Nominal 전환 + Nominal HC 실행 — 이벤트 바인딩
+   Nominal 전환 + Nominal HC 실행
    ============================================================ */
 function initNominalSection(db){
   const btnNom = document.getElementById("btn-nominal");
@@ -413,20 +726,16 @@ function initNominalSection(db){
 
   if (btnHC) btnHC.addEventListener("click", ()=>{
     const dsRaw = sessionStorage.getItem("designState");
-    if (!dsRaw) { alert("설계 상태를 불러올 수 없습니다. 설계 화면에서 다시 Project Database로 이동해주세요."); return; }
+    if (!dsRaw) { alert("설계 상태를 불러올 수 없습니다."); return; }
     const ds = JSON.parse(dsRaw);
     const state = ds.canvas;
     if (!state || !state.pipes || !state.pipes.length) { alert("배관 데이터가 없습니다."); return; }
 
-    // 각 배관에 fixedD(nominal) 설정, fixedQ 해제
     state.pipes.forEach(p => {
       const dbPipe = db.pipes.find(dp => dp.id === p.id);
       if (dbPipe && dbPipe.D != null && isFinite(dbPipe.D)) {
         p.fixedD = closestNPS(+dbPipe.D) / 1000;
-      } else {
-        p.fixedD = null;
-      }
-      // fixedQ는 유지 (원래 고정유량 배관은 그대로)
+      } else { p.fixedD = null; }
       p.fittingsK = p.fittingsK || [];
     });
 
@@ -434,23 +743,15 @@ function initNominalSection(db){
     try {
       const result = SolverModule.solveNetwork(state, gp);
       if (result.error) { hcResult.style.display = "block"; hcResult.innerHTML = `<b style="color:var(--bad)">⚠ ${result.error}</b>`; return; }
-
-      let rows = state.pipes.map(p => {
+      let rowsHC = state.pipes.map(p => {
         const D_nom_mm = p.fixedD ? (p.fixedD * 1000).toFixed(2) : "-";
-        const Q_str = p.Q != null ? (+p.Q).toExponential(3) : "-";
-        return `<tr><td>P${p.id} (N${p.from}→N${p.to})</td><td>${Q_str} m³/s</td><td>${D_nom_mm} mm (nominal 고정)</td></tr>`;
+        return `<tr><td>P${p.id} (N${p.from}→N${p.to})</td><td>${p.Q!=null?(+p.Q).toExponential(3):"-"} m³/s</td><td>${D_nom_mm} mm</td></tr>`;
       }).join("");
-
       hcResult.style.display = "block";
       hcResult.innerHTML = `
         <b>▶ Nominal 직경 기준 Hardy-Cross 재계산 결과</b>
         <span style="color:#5b6168; font-size:11px; margin-left:8px">수렴 ${result.converged ? '✓' : '⚠ 미수렴'} (반복 ${result.iterations}회)</span>
-        <table style="margin-top:8px">
-          <tr><th>배관</th><th>재계산 유량 Q</th><th>적용 직경 (NPS)</th></tr>
-          ${rows}
-        </table>
-        <div class="hint" style="margin-top:4px">Nominal 직경을 고정한 후 Hardy-Cross로 유량을 재수렴한 결과입니다. 원래 D_opt 설계와의 유량 차이를 확인하세요.</div>
-      `;
+        <table style="margin-top:8px"><tr><th>배관</th><th>재계산 유량 Q</th><th>적용 직경 (NPS)</th></tr>${rowsHC}</table>`;
     } catch(e) {
       hcResult.style.display = "block";
       hcResult.innerHTML = `<b style="color:var(--bad)">⚠ 계산 오류: ${e.message}</b>`;
@@ -470,7 +771,7 @@ function initPumpSection(db){
     if (!catalog) { noteBox.textContent = "dongwonpump.json 로드 실패 — 같은 폴더에 파일이 있는지 확인해주세요."; }
     cardsBox.innerHTML = db.pumps.map((p,idx)=> pumpCardHTML(p, idx)).join("");
     db.pumps.forEach((p, idx)=> wirePumpCard(p, idx, catalog));
-  }).catch(()=>{ noteBox.textContent = "dongwonpump.json 로드 실패 — 같은 폴더에 파일이 있는지 확인해주세요."; });
+  }).catch(()=>{ noteBox.textContent = "dongwonpump.json 로드 실패."; });
 }
 
 function pumpCardHTML(p, idx){
@@ -501,21 +802,19 @@ function wirePumpCard(p, idx, catalog){
   function update(){
     const count = Math.max(1, parseInt(countEl.value, 10) || 1);
     const Q_each = p.Q / count;
-    const Q_each_min = Q_each * 60;
     const H_each = p.H_total;
-    pointEl.textContent = `대당 — Q ≈ ${Q_each_min.toFixed(3)} m³/min, H ≈ ${H_each.toFixed(3)} m  (총 ${count}대 병렬 운전 가정)`;
+    pointEl.textContent = `대당 — Q ≈ ${(Q_each*60).toFixed(3)} m³/min, H ≈ ${H_each.toFixed(3)} m  (총 ${count}대 병렬 운전 가정)`;
 
-    if (!catalog) { recEl.innerHTML = `<div class="hint">펌프 카탈로그(dongwonpump.json)를 불러오지 못했습니다.</div>`; return; }
-
+    if (!catalog) { recEl.innerHTML = `<div class="hint">펌프 카탈로그를 불러오지 못했습니다.</div>`; return; }
     const type = typeEl.value;
     const candidates = Object.keys(catalog)
       .map(key => ({ key, ...catalog[key] }))
       .filter(c => c.category === type && c.bep_estimated && isFinite(c.bep_estimated.Q_m3min) && isFinite(c.bep_estimated.H_m));
 
-    if (!candidates.length) { recEl.innerHTML = `<div class="hint">선택한 타입(${type === 'booster' ? '가압용' : '급수용'})의 BEP 데이터가 카탈로그에 없습니다.</div>`; return; }
+    if (!candidates.length) { recEl.innerHTML = `<div class="hint">선택한 타입의 BEP 데이터가 없습니다.</div>`; return; }
 
     const ranked = candidates.map(c=>{
-      const dQ = (c.bep_estimated.Q_m3min - Q_each_min) / Q_each_min;
+      const dQ = (c.bep_estimated.Q_m3min - Q_each*60) / (Q_each*60);
       const dH = (c.bep_estimated.H_m - H_each) / H_each;
       return { ...c, dist: Math.sqrt(dQ*dQ + dH*dH) };
     }).sort((a,b)=> a.dist - b.dist).slice(0, 5);
@@ -523,15 +822,13 @@ function wirePumpCard(p, idx, catalog){
     recEl.innerHTML = `<table style="margin-top:6px">
       <tr><th>순위</th><th>모델</th><th>시리즈</th><th>출력</th><th>BEP (Q, H)</th><th>상대거리</th></tr>
       ${ranked.map((c,i)=> `<tr>
-        <td>${i+1}${i===0 ? ' <span class="pill good">추천</span>' : ''}</td>
-        <td>${c.key}</td>
-        <td>${c.series || '-'}</td>
-        <td>${c.power_kW!=null ? c.power_kW+' kW' : (c.power_HP!=null ? c.power_HP+' HP' : '-')}</td>
+        <td>${i+1}${i===0?' <span class="pill good">추천</span>':''}</td>
+        <td>${c.key}</td><td>${c.series||'-'}</td>
+        <td>${c.power_kW!=null?c.power_kW+' kW':(c.power_HP!=null?c.power_HP+' HP':'-')}</td>
         <td>${fmt(c.bep_estimated.Q_m3min,3)} m³/min, ${fmt(c.bep_estimated.H_m,2)} m</td>
         <td>${(c.dist*100).toFixed(1)} %</td>
       </tr>`).join("")}
-    </table>
-    <div class="hint">상대거리 = √((ΔQ/Q)² + (ΔH/H)²) — BEP 곡선 데이터는 동원펌프 카탈로그 추정값(bep_estimated)입니다.</div>`;
+    </table>`;
   }
 
   countEl.addEventListener("input", update);

@@ -1,25 +1,31 @@
 {
-  "base": { "b": 0.03 },
-  "fittings": { "default": { "F": 0.010, "b": 0.002 } },
-  "valves": { "default": { "F": 0.030, "b": 0.008 } },
+  "_sources": {
+    "base":         "Peters, Timmerhaus & West (2003) Plant Design and Economics — 배관 유지보수 고정자본 대비 5%, 설치비 인자 유체공정 평균 35%",
+    "fittings":     "Peters et al. Table 7-8 — 피팅류 설치 가산 약 3%, 유지보수 0.5%",
+    "valves":       "DOE/Europump Pump LCC Guide (2001) — 밸브 수리·교체 비용 별도 계상 근거, 설치비 5%, 유지보수 1%",
+    "pump_small":   "DOE Pump LCC Guide (2001) + Peters et al. — 소형(<5kW) 설치비 10%, 연간 유지보수 1~2%",
+    "pump_medium":  "DOE Pump LCC Guide 사례(21,500 EUR 투자, 연 유지보수 ~500+1,250 EUR) — 중형 설치비 25%, 연 유지보수 2~3%",
+    "pump_large":   "Peters et al. 대형 장치 설치비 45~55%, 연 유지보수 3~5% (고정자본 대비)",
+    "height_factor":"Peters et al. Service Facilities 항목 — 높이차 증가 시 구조물·지지대·단열 비용 가산"
+  },
+
+  "base": { "b": 0.05, "F": 0.35 },
+
+  "fittings": { "default": { "F": 0.030, "b": 0.005 } },
+  "valves":   { "default": { "F": 0.050, "b": 0.010 } },
 
   "pump_power_class": {
     "small": {
-      "power_kW_range": [0, 5],
       "F": 0.10,
-      "b": 0.010
+      "b": 0.015
     },
-
     "medium": {
-      "power_kW_range": [5, 30],
       "F": 0.25,
-      "b": 0.020
+      "b": 0.025
     },
-
     "large": {
-      "power_kW_range": [30, 100000],
       "F": 0.50,
-      "b": 0.040
+      "b": 0.045
     }
   },
 
@@ -28,10 +34,12 @@
     "10_30m":    { "F": 0.050, "b": 0.005 },
     "30_60m":    { "F": 0.100, "b": 0.012 },
     "60_100m":   { "F": 0.180, "b": 0.020 },
-    "100m_plus": { "F": 0.280, "b": 0.035 }
+    "100m_plus": { "F": 0.320, "b": 0.040 }
   },
+
   "calculation": {
     "F_total_formula": "sum(component_F) * pump_count_multiplier",
     "b_total_formula": "(base_b + sum(component_b)) * pump_count_multiplier"
   }
 }
+

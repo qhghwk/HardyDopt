@@ -6,77 +6,345 @@
 <title>Hardy-Cross 배관망 설계 + 최적 직경</title>
 <style>
   :root{
-    --bg:#f3f4f6; --panel:#ffffff; --panel2:#eef1f4; --line:#d8dce1;
-    --text:#2b2f33; --accent:#00897b; --accent2:#1976d2; --warn:#ef6c00; --bad:#d32f2f; --good:#2e7d32;
+    --bg:#f1f5f9;
+    --panel:#ffffff;
+    --panel2:#f8fafc;
+    --line:#e2e8f0;
+    --text:#0f172a;
+    --text-muted:#64748b;
+    --accent:#0891b2;
+    --accent2:#2563eb;
+    --green:#16a34a;
+    --purple:#7c3aed;
+    --orange:#ea580c;
+    --red:#dc2626;
+    --toolbar-bg:#1e2330;
+    --toolbar-group:#252c3b;
+    --toolbar-btn:#2d3548;
+    --toolbar-btn-hover:#3a4460;
+    --toolbar-text:#cbd5e1;
+    --toolbar-text-dim:#64748b;
   }
-  *{box-sizing:border-box;}
-  body{margin:0; font-family:"Segoe UI",sans-serif; background:var(--bg); color:var(--text);}
-  header{padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
-  header h1{font-size:16px; margin:0; color:var(--accent);}
-  .toolbar button{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:7px 14px; cursor:pointer; font-size:13px;}
-  .toolbar button.active{background:var(--accent2); color:#fff; border-color:var(--accent2);}
-  .toolbar button:hover{border-color:var(--accent);}
-  main{display:flex; height:calc(100vh - 54px);}
-  #canvasWrap{flex:1; position:relative; overflow:hidden; background:repeating-linear-gradient(0deg,#e4e7eb 0 1px,#fafbfc 1px 28px),repeating-linear-gradient(90deg,#e4e7eb 0 1px,#fafbfc 1px 28px);}
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:"Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden;}
+
+  /* ── TOOLBAR ───────────────────────────────────────────── */
+  header{
+    height:52px; background:var(--toolbar-bg);
+    border-bottom:1px solid rgba(255,255,255,0.05);
+    display:flex; align-items:center; gap:0; padding:0 12px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.35);
+  }
+  header h1{
+    font-size:13px; font-weight:700; color:#38bdf8;
+    letter-spacing:0.5px; white-space:nowrap; padding-right:14px;
+    border-right:1px solid rgba(255,255,255,0.1);
+  }
+  .toolbar{display:flex; align-items:center; gap:4px; flex:1; padding:0 10px; flex-wrap:nowrap; overflow-x:auto;}
+  .tbgroup{display:flex; align-items:center; gap:3px; background:var(--toolbar-group); border-radius:8px; padding:3px;}
+  .tbgroup + .tbgroup{margin-left:6px;}
+  .tbsep{width:1px; height:24px; background:rgba(255,255,255,0.08); margin:0 4px;}
+  .toolbar button{
+    background:transparent; color:var(--toolbar-text);
+    border:none; border-radius:6px; padding:5px 10px;
+    cursor:pointer; font-size:12px; white-space:nowrap;
+    transition:background 0.15s, color 0.15s;
+    display:flex; align-items:center; gap:5px;
+  }
+  .toolbar button:hover{background:var(--toolbar-btn-hover); color:#f1f5f9;}
+  .toolbar button.active{background:var(--accent2); color:#fff;}
+  .toolbar button.btn-solve{background:#15803d; color:#fff; font-weight:600;}
+  .toolbar button.btn-solve:hover{background:#16a34a;}
+  .toolbar button.btn-dopt{background:#7c3aed; color:#fff; font-weight:600;}
+  .toolbar button.btn-dopt:hover{background:#6d28d9;}
+  .toolbar button.btn-nps{background:#854d0e; color:#fff; font-weight:600;}
+  .toolbar button.btn-nps:hover{background:#92400e;}
+  .toolbar button.btn-continuity{background:#059669; color:#fff; font-weight:600;}
+  .toolbar button.btn-continuity:hover{background:#10b981;}
+  .toolbar button.btn-eval{background:#0d9488; color:#fff; font-weight:600;}
+  .toolbar button.btn-eval:hover{background:#0f766e;}
+  .toolbar button.btn-reg{background:#4f46e5; color:#fff; font-weight:600;}
+  .toolbar button.btn-reg:hover{background:#4338ca;}
+  .toolbar button.btn-reg:disabled{background:#6366f1; opacity:0.6; cursor:wait;}
+  .toolbar button.btn-save{background:#1d4ed8; color:#fff; font-weight:600;}
+  .toolbar button.btn-save:hover{background:#2563eb;}
+  .toolbar button.btn-load{background:#374151; color:#e2e8f0; font-weight:600;}
+  .toolbar button.btn-load:hover{background:#4b5563;}
+  .toolbar button.btn-snap{background:#0e7490; color:#fff; font-weight:600;}
+  .toolbar button.btn-snap:hover{background:#0891b2;}
+  .toolbar button.btn-snap.snap-off{background:#374151; color:#94a3b8;}
+  .toolbar button.btn-align{color:var(--toolbar-text); font-size:13px; padding:4px 8px;}
+  .toolbar button.btn-align:hover{background:var(--toolbar-btn-hover); color:#f1f5f9;}
+  .toolbar button.btn-3d{background:#5b21b6; color:#fff;}
+  .toolbar button.btn-3d:hover{background:#6d28d9;}
+  .toolbar button.btn-photo{background:#44403c; color:#e7e5e4;}
+  .toolbar button.btn-photo:hover{background:#57534e;}
+  .toolbar button.btn-db{background:#0e7490; color:#fff; font-weight:600;}
+  .toolbar button.btn-db:hover{background:#0891b2;}
+  .toolbar button.btn-del{color:#fca5a5;}
+  .toolbar button.btn-del:hover{background:#7f1d1d; color:#fee2e2;}
+  .toolbar button.btn-clear{color:#fdba74;}
+  .toolbar button.btn-clear:hover{background:#7c2d12; color:#fed7aa;}
+  #solveStatus{font-size:11px; color:#94a3b8; white-space:nowrap; margin-left:8px; min-width:0;}
+  .hint-toolbar{font-size:10.5px; color:var(--toolbar-text-dim); white-space:nowrap; margin-left:auto; padding-left:8px; display:none;}
+
+  /* ── LAYOUT ────────────────────────────────────────────── */
+  main{display:flex; height:calc(100vh - 52px);}
+
+  /* ── CANVAS ─────────────────────────────────────────────── */
+  #canvasWrap{
+    flex:1; position:relative; overflow:hidden;
+    background-color:#f7f8fb;
+    background-image:
+      radial-gradient(circle, #d1d9e6 1px, transparent 1px);
+    background-size:28px 28px;
+  }
   canvas{position:absolute; top:0; left:0;}
-  #selPopup{position:absolute; z-index:6; display:none; background:var(--panel); border:1px solid var(--line); border-radius:8px;
-    box-shadow:0 6px 20px rgba(0,0,0,0.18); padding:10px 12px; font-size:12px; min-width:220px; max-width:270px; max-height:72vh; overflow-y:auto;}
-  #selPopup .close{position:absolute; top:6px; right:8px; cursor:pointer; color:#9aa0a6; font-size:13px;}
-  #selPopup .row label{flex:0 0 80px;}
-  #sidebar{width:320px; background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; padding:12px;}
-  #sidebar h3{color:var(--accent); font-size:13px; margin:14px 0 8px; border-bottom:1px solid var(--line); padding-bottom:4px;}
+
+  /* ── SELECTION POPUP ────────────────────────────────────── */
+  #selPopup{
+    position:absolute; z-index:6; display:none;
+    background:#fff; border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 8px 30px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08);
+    padding:12px 14px; font-size:12px;
+    min-width:230px; max-width:280px; max-height:72vh; overflow-y:auto;
+  }
+  #selPopup .close{position:absolute; top:8px; right:10px; cursor:pointer; color:#94a3b8; font-size:14px; line-height:1;}
+  #selPopup .close:hover{color:var(--red);}
+  #selPopup .row label{flex:0 0 84px; color:var(--accent2);}
+
+  /* ── SIDEBAR ─────────────────────────────────────────────── */
+  #sidebar{
+    width:300px; background:var(--panel);
+    border-left:1px solid var(--line);
+    overflow-y:auto; padding:0;
+    display:flex; flex-direction:column;
+  }
+  .sb-section{padding:14px 14px 10px; border-bottom:1px solid var(--line);}
+  .sb-section:last-child{border-bottom:none;}
+  .sb-head{
+    font-size:11px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase;
+    color:var(--accent2); display:flex; align-items:center; gap:6px;
+    margin-bottom:10px;
+  }
+  .sb-head::before{content:''; display:block; width:3px; height:14px; background:var(--accent2); border-radius:2px;}
+  .sb-head.teal{color:var(--accent);}
+  .sb-head.teal::before{background:var(--accent);}
+  #sidebar h3{
+    font-size:11px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase;
+    color:var(--accent); display:flex; align-items:center; gap:6px;
+    margin:14px 0 8px; padding-bottom:0;
+    border:none;
+  }
+  #sidebar h3::before{content:''; display:block; width:3px; height:13px; background:var(--accent); border-radius:2px;}
   #sidebar h3:first-child{margin-top:0;}
-  #sidebar .category{font-size:13px; font-weight:700; color:#fff; background:var(--accent2); margin:0 -12px 12px; padding:9px 12px; letter-spacing:0.3px;}
-  #sidebar .category.cat2{background:#00897b; margin-top:20px;}
+  #sidebar .category{
+    font-size:11px; font-weight:700; letter-spacing:0.7px; text-transform:uppercase;
+    color:#fff; background:linear-gradient(135deg,var(--accent2),#1d4ed8);
+    padding:9px 14px; margin:0 0 10px;
+    display:flex; align-items:center; gap:6px;
+  }
+  #sidebar .category.cat2{background:linear-gradient(135deg,var(--accent),#0e7490);}
+
+  /* ── FORM ROWS ───────────────────────────────────────────── */
   .row{display:flex; align-items:center; gap:6px; margin:5px 0; font-size:12px;}
-  .row label{flex:0 0 90px; color:#1976d2;}
-  .row input, .row select{flex:1; background:#fff; color:var(--text); border:1px solid var(--line); border-radius:4px; padding:4px 6px; font-size:12px;}
-  .row select.unit-sel{flex:0 0 72px;}
-  .hint{font-size:11px; color:#6b7177; line-height:1.5; margin:4px 0;}
-  .pill{display:inline-block; background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:2px 8px; font-size:11px; color:var(--accent);}
-  #photoPanel{position:absolute; z-index:7; display:none; left:16px; top:16px; width:25%; height:25%; min-width:160px; min-height:120px;
-    background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.18);
-    overflow:hidden; resize:both; flex-direction:column;}
+  .row label{flex:0 0 90px; color:#475569; font-size:11.5px;}
+  .row input, .row select{
+    flex:1; background:#f8fafc; color:var(--text);
+    border:1px solid #cbd5e1; border-radius:5px;
+    padding:5px 8px; font-size:12px;
+    transition:border-color 0.15s, box-shadow 0.15s;
+  }
+  .row input:focus, .row select:focus{
+    outline:none; border-color:var(--accent2);
+    box-shadow:0 0 0 2px rgba(37,99,235,0.12);
+    background:#fff;
+  }
+  .row select.unit-sel{flex:0 0 74px;}
+  .hint{font-size:11px; color:#94a3b8; line-height:1.6; margin:4px 0;}
+  .pill{
+    display:inline-block; background:#eff6ff;
+    border:1px solid #bfdbfe; border-radius:20px;
+    padding:1px 7px; font-size:10.5px; color:var(--accent2);
+  }
+  button.sb-btn{
+    width:100%; margin-top:8px; padding:7px 12px;
+    border:none; border-radius:6px; cursor:pointer;
+    font-size:12px; font-weight:600; letter-spacing:0.2px;
+    transition:filter 0.15s, transform 0.1s;
+  }
+  button.sb-btn:hover{filter:brightness(1.1);}
+  button.sb-btn:active{transform:scale(0.98);}
+  button.sb-btn.green{background:#dcfce7; color:#15803d;}
+  button.sb-btn.teal{background:#cffafe; color:#0e7490;}
+
+  /* ── PHOTO PANEL ─────────────────────────────────────────── */
+  #photoPanel{
+    position:absolute; z-index:7; display:none;
+    left:16px; top:16px; width:25%; height:25%; min-width:160px; min-height:120px;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.15);
+    overflow:hidden; resize:both; flex-direction:column;
+  }
   #photoPanel.show{display:flex;}
-  #photoPanel .photoHandle{cursor:move; font-size:10px; letter-spacing:1px; color:#9aa0a6; user-select:none;
-    display:flex; align-items:center; justify-content:space-between; padding:5px 10px; background:var(--panel2); border-bottom:1px solid var(--line);}
-  #photoPanel .photoHandle .close{cursor:pointer; color:#9aa0a6; font-size:13px;}
-  #photoPanel .photoHandle .close:hover{color:var(--bad);}
-  #photoPanel .photoBody{flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; background:#f6f7f9;}
+  #photoPanel .photoHandle{
+    cursor:move; font-size:10px; color:#94a3b8; user-select:none;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:5px 10px; background:#f8fafc; border-bottom:1px solid var(--line);
+  }
+  #photoPanel .photoHandle .close{cursor:pointer; color:#94a3b8; font-size:13px;}
+  #photoPanel .photoHandle .close:hover{color:var(--red);}
+  #photoPanel .photoBody{flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; background:#f1f5f9;}
   #photoPanel .photoBody img{max-width:100%; max-height:100%; object-fit:contain;}
-  #photoPanel .photoEmpty{font-size:11px; color:#9aa0a6; text-align:center; padding:12px;}
-  #threeWrap{position:absolute; inset:0; display:none; background:#1b1b1b;}
+  #photoPanel .photoEmpty{font-size:11px; color:#94a3b8; text-align:center; padding:12px;}
+
+  /* ── 3D / MISC ───────────────────────────────────────────── */
+  #threeWrap{position:absolute; inset:0; display:none; background:#111827;}
   #threeWrap.show{display:block;}
-  .closeBtn{position:absolute; top:10px; right:10px; z-index:5; background:#c0392b; color:#fff; border:none; border-radius:6px; padding:6px 12px; cursor:pointer;}
+  .closeBtn{
+    position:absolute; top:12px; right:12px; z-index:5;
+    background:#dc2626; color:#fff; border:none; border-radius:7px;
+    padding:6px 14px; cursor:pointer; font-size:13px; font-weight:600;
+  }
   .msg{font-size:11px; margin-top:6px;}
+
+  /* ── TABLES ──────────────────────────────────────────────── */
   table{border-collapse:collapse; width:100%; font-size:11px;}
-  td,th{border:1px solid var(--line); padding:3px 6px; text-align:center;}
-  th{background:var(--panel2); color:var(--accent);}
+  td,th{border:1px solid var(--line); padding:4px 6px; text-align:center;}
+  th{background:#f1f5f9; color:var(--accent2); font-weight:600;}
+  tr:nth-child(even) td{background:#fafcff;}
+
+  /* Link buttons */
+  button[id$="-link"]{
+    flex:0 0 auto; padding:4px 8px; font-size:11px;
+    background:var(--panel2); color:var(--accent);
+    border:1px solid var(--line); border-radius:5px; cursor:pointer;
+  }
+  button[id$="-link"]:hover{background:#e0f2fe; border-color:var(--accent);}
+
+  /* Scrollbar */
+  #sidebar::-webkit-scrollbar{width:5px;}
+  #sidebar::-webkit-scrollbar-track{background:transparent;}
+  #sidebar::-webkit-scrollbar-thumb{background:#cbd5e1; border-radius:3px;}
+
+  /* ── DESIGN SAVE/LOAD MODAL ───────────────────────────────── */
+  #designModal{
+    display:none; position:fixed; inset:0; z-index:200;
+    background:rgba(0,0,0,0.55); align-items:center; justify-content:center;
+  }
+  #designModal.open{display:flex;}
+  .dm-box{
+    background:#fff; border-radius:12px; width:480px; max-width:95vw;
+    box-shadow:0 24px 64px rgba(0,0,0,0.35); overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  .dm-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 16px; background:#1e2330; flex-shrink:0;
+  }
+  .dm-tabs{display:flex; gap:4px;}
+  .dm-tab{
+    background:transparent; border:none; color:#64748b; cursor:pointer;
+    font-size:12px; font-weight:600; padding:5px 12px; border-radius:6px;
+    transition:background 0.15s, color 0.15s;
+  }
+  .dm-tab.active{background:#0891b2; color:#fff;}
+  .dm-tab:not(.active):hover{background:#2d3548; color:#cbd5e1;}
+  .dm-close{background:transparent; border:none; color:#94a3b8; cursor:pointer; font-size:17px; line-height:1; padding:2px 4px;}
+  .dm-close:hover{color:#f87171;}
+  .dm-body{padding:16px; flex:1; overflow-y:auto; max-height:400px;}
+
+  /* Save panel */
+  .dm-save-row{display:flex; gap:8px; align-items:center;}
+  .dm-save-row input{
+    flex:1; border:1px solid #cbd5e1; border-radius:7px;
+    padding:8px 10px; font-size:13px; color:#0f172a; background:#f8fafc;
+    outline:none; transition:border-color 0.15s;
+  }
+  .dm-save-row input:focus{border-color:#0891b2; background:#fff;}
+  .dm-save-btn{
+    background:#0891b2; color:#fff; border:none; border-radius:7px;
+    padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;
+  }
+  .dm-save-btn:hover{background:#0e7490;}
+  .dm-save-btn:disabled{background:#94a3b8; cursor:not-allowed;}
+  .dm-slot-info{font-size:11.5px; color:#64748b; margin-top:8px;}
+  .dm-slot-warn{font-size:11.5px; color:#dc2626; margin-top:8px;}
+
+  /* Load list */
+  .dm-list{display:flex; flex-direction:column; gap:8px;}
+  .dm-empty{text-align:center; color:#94a3b8; font-size:13px; padding:24px 0;}
+  .dm-item{
+    display:flex; align-items:center; gap:10px;
+    background:#f8fafc; border:1px solid #e2e8f0;
+    border-radius:8px; padding:10px 12px;
+    transition:border-color 0.15s;
+  }
+  .dm-item:hover{border-color:#0891b2;}
+  .dm-item-info{flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;}
+  .dm-item-name{font-size:13px; font-weight:600; color:#0f172a; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .dm-item-meta{font-size:11px; color:#64748b;}
+  .dm-item-btns{display:flex; gap:6px; flex-shrink:0;}
+  .dm-btn-load{
+    background:#0891b2; color:#fff; border:none; border-radius:6px;
+    padding:5px 11px; font-size:12px; font-weight:600; cursor:pointer;
+  }
+  .dm-btn-load:hover{background:#0e7490;}
+  .dm-btn-del{
+    background:transparent; color:#dc2626; border:1px solid #fca5a5;
+    border-radius:6px; padding:5px 9px; font-size:12px; cursor:pointer;
+  }
+  .dm-btn-del:hover{background:#fee2e2;}
 </style>
 </head>
 <body>
 <header>
-  <h1>Hardy-Cross 배관망 설계기</h1>
+  <h1>Hardy-Cross</h1>
   <div class="toolbar">
-    <button id="btn-node">● 노드</button>
-    <button id="btn-pump">⚙ 펌프</button>
-    <button id="btn-pipe">— 배관</button>
-    <button id="btn-arrow">↗ 화살표(유출입)</button>
-    <button id="btn-select">↖ 선택/이동</button>
-    <button id="btn-delete">🗑 삭제</button>
-    <button id="btn-clear">⨯ 전체 초기화</button>
-    <button id="btn-solve" style="background:#2e7d32; border-color:#2e7d32; color:#fff;">▶ Hardy-Cross 계산</button>
-    <span id="solveStatus" class="hint" style="margin-left:6px"></span>
-    <button id="btn-3d" style="background:#5e35b1; border-color:#5e35b1; color:#fff;">🧊 3D 보기</button>
-    <button id="btn-photo" style="background:#6d4c41; border-color:#6d4c41; color:#fff;">🖼 사진</button>
+    <div class="tbgroup">
+      <button id="btn-node">● 노드</button>
+      <button id="btn-pump">⚙ 펌프</button>
+      <button id="btn-pipe">— 배관</button>
+      <button id="btn-arrow">↗ 유출입</button>
+    </div>
+    <div class="tbgroup">
+      <button id="btn-select">↖ 선택</button>
+      <button id="btn-delete" class="btn-del">🗑 삭제</button>
+      <button id="btn-clear" class="btn-clear">⨯ 초기화</button>
+    </div>
+    <div class="tbsep"></div>
+    <button id="btn-snap" class="btn-snap" title="그리드 스냅 켜기/끄기 (노드가 격자점에 정렬됩니다)">🔲 스냅 ON</button>
+    <div class="tbgroup">
+      <button id="btn-align-left"    class="btn-align" title="선택 노드 좌측 정렬 (Shift+클릭으로 다중 선택)">◀ 좌</button>
+      <button id="btn-align-right"   class="btn-align" title="선택 노드 우측 정렬">▶ 우</button>
+      <button id="btn-align-top"     class="btn-align" title="선택 노드 상단 정렬">▲ 상</button>
+      <button id="btn-align-bottom"  class="btn-align" title="선택 노드 하단 정렬">▼ 하</button>
+      <button id="btn-align-centerH" class="btn-align" title="선택 노드 수평 중앙 정렬">↔ 중</button>
+      <button id="btn-align-centerV" class="btn-align" title="선택 노드 수직 중앙 정렬">↕ 중</button>
+      <button id="btn-dist-h"        class="btn-align" title="선택 노드 수평 균등 간격">↔↔</button>
+      <button id="btn-dist-v"        class="btn-align" title="선택 노드 수직 균등 간격">↕↕</button>
+    </div>
+    <div class="tbsep"></div>
+    <button id="btn-solve-hc" class="btn-solve">▶ HC 계산</button>
+    <button id="btn-solve-dopt" class="btn-dopt">▶ Q+D Iteration</button>
+    <button id="btn-reg-dopt" class="btn-reg">📈 D회귀최적화</button>
+    <button id="btn-nps" class="btn-nps" style="display:none">📏 NPS + HC</button>
+    <button id="btn-eval" class="btn-eval" style="display:none">📊 Evaluation</button>
+    <span id="solveStatus"></span>
+    <div class="tbsep"></div>
+    <button id="btn-continuity" class="btn-continuity">✓ 연속방정식</button>
+    <div class="tbsep"></div>
+    <button id="btn-save-design" class="btn-save">💾 저장</button>
+    <button id="btn-load-design" class="btn-load">📂 불러오기</button>
+    <div class="tbsep"></div>
+    <button id="btn-3d" class="btn-3d">🧊 3D</button>
+    <button id="btn-photo" class="btn-photo">🖼 사진</button>
     <input type="file" id="photo-input" accept="image/*" style="display:none"/>
-    <button id="btn-pump-result" style="background:#00897b; border-color:#00897b; color:#fff;">📂 Project Database →</button>
+    <button id="btn-pump-result" class="btn-db">📂 Project DB →</button>
   </div>
-  <span class="hint" style="margin-left:auto">노드/펌프=클릭 배치 · 배관=두 노드 순서클릭 · 화살표=드래그 연결 · 요소 클릭=설정창 (Shift=다중선택)</span>
 </header>
 <main>
   <div id="canvasWrap">
-    <canvas id="cv"></canvas>
     <div id="selPopup"></div>
     <div id="threeWrap">
       <button class="closeBtn" id="btn-3d-close">✕ 닫기</button>
@@ -87,36 +355,78 @@
     </div>
   </div>
   <div id="sidebar">
-    <div class="category cat1">🌐 공통 설정 (Doptimization)</div>
-    <div class="row"><label>전기요금 C₂</label><input id="g-C2" type="text" placeholder="예: 150"/><select id="g-C2unit" class="unit-sel"><option>원/kWh</option><option>$/kWh</option></select>
-      <button type="button" id="g-C2-link" title="전기요금 참고" style="flex:0 0 auto; padding:4px 8px; font-size:11px; background:var(--panel2); color:var(--accent); border:1px solid var(--line); border-radius:4px; cursor:pointer;">🔗</button></div>
-    <div class="row"><label>운영시간 t</label><input id="g-t" type="text" placeholder="예: 4000"/>
-      <select id="g-tUnit" class="unit-sel"><option value="h_yr">h/yr</option><option value="h_day">h/day</option><option value="day_yr">day/yr</option></select></div>
-    <div class="row"><label>효율 η</label><input id="g-eta" type="text" placeholder="0.75"/></div>
-    <div class="row"><label>이자율 i (%)</label><input id="g-i" type="text" placeholder="예: 4.5"/>
-      <button type="button" id="g-i-link" title="기준금리 참고" style="flex:0 0 auto; padding:4px 8px; font-size:11px; background:var(--panel2); color:var(--accent); border:1px solid var(--line); border-radius:4px; cursor:pointer;">🔗</button></div>
-    <div class="row"><label>상환기간 n</label><input id="g-n" type="text" placeholder="years"/></div>
-    <div class="row"><label>유체</label><select id="g-fluid"></select></div>
-    <div class="row" id="g-T-row" style="display:none"><label>온도 T</label><input id="g-T" type="text" placeholder="예: 25"/>
-      <select id="g-Tunit" class="unit-sel"><option>°C</option><option>°F</option><option>K</option></select></div>
-    <div class="row" id="g-P-row" style="display:none"><label>압력 P</label><input id="g-P" type="text" placeholder="예: 1.013"/>
-      <select id="g-Punit" class="unit-sel"><option>bar</option><option>atm</option><option>psi</option><option>kPa</option></select></div>
-    <div id="g-fluid-props" class="hint"></div>
-    <div class="hint">요소별 값(펌프 출력·노드 높이·조도 등)은 캔버스에서 클릭하면 뜨는 창에서 설정. C₁,n,b,F는 caculbF.json 있으면 배관별 계산, 없으면 기본값 사용.</div>
-    <div id="doptBox" class="hint"></div>
-    <button id="btn-dopt-batch" style="margin-top:6px; width:100%; background:#00897b; border-color:#00897b; color:#fff;">📐 전체 배관 D_opt 일괄계산</button>
-    <div id="doptBatchBox" class="hint" style="margin-top:6px"></div>
 
-    <h3>C₁, n 카탈로그 피팅</h3>
-    <div id="c1nFitBox"></div>
+    <div class="sb-section">
+      <div class="sb-head">공통 설정 — Doptimization</div>
+      <div class="row"><label>전기요금 C₂</label><input id="g-C2" type="text" placeholder="예: 150"/><select id="g-C2unit" class="unit-sel"><option>원/kWh</option><option>$/kWh</option></select>
+        <button type="button" id="g-C2-link" title="전기요금 참고">🔗</button></div>
+      <div class="row"><label>운영시간 t</label><input id="g-t" type="text" placeholder="예: 4000"/>
+        <select id="g-tUnit" class="unit-sel"><option value="h_yr">h/yr</option><option value="h_day">h/day</option><option value="day_yr">day/yr</option></select></div>
+      <div class="row"><label>효율 η</label><input id="g-eta" type="text" placeholder="0.75"/></div>
+      <div class="row"><label>이자율 i (%)</label><input id="g-i" type="text" placeholder="예: 4.5"/>
+        <button type="button" id="g-i-link" title="기준금리 참고">🔗</button></div>
+      <div class="row"><label>상환기간 n</label><input id="g-n" type="text" placeholder="years"/></div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-head teal">유체 물성</div>
+      <div class="row"><label>유체</label><select id="g-fluid"></select></div>
+      <div class="row" id="g-T-row" style="display:none"><label>온도 T</label><input id="g-T" type="text" placeholder="예: 25"/>
+        <select id="g-Tunit" class="unit-sel"><option>°C</option><option>°F</option><option>K</option></select></div>
+      <div class="row" id="g-P-row" style="display:none"><label>압력 P</label><input id="g-P" type="text" placeholder="예: 1.013"/>
+        <select id="g-Punit" class="unit-sel"><option>bar</option><option>atm</option><option>psi</option><option>kPa</option></select></div>
+      <div id="g-fluid-props" class="hint" style="margin-top:4px"></div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-head">D_opt 계산 결과</div>
+      <div class="hint" style="color:#94a3b8; font-size:10.5px; margin-bottom:6px">펌프 출력·노드 높이·조도 등은 캔버스 요소 클릭 → 팝업 창에서 설정. C₁,n,b,F는 caculbF.json 기반 자동 계산 (없으면 기본값).</div>
+      <div id="doptBox" class="hint"></div>
+      <button id="btn-dopt-batch" class="sb-btn teal">📐 전체 배관 D_opt 일괄계산</button>
+      <div id="doptBatchBox" class="hint" style="margin-top:8px"></div>
+    </div>
+
+    <div class="sb-section">
+      <div class="sb-head">C₁, n 카탈로그 피팅</div>
+      <div id="c1nFitBox"></div>
+    </div>
 
   </div>
 </main>
 
+<!-- 디자인 저장/불러오기 모달 -->
+<div id="designModal">
+  <div class="dm-box">
+    <div class="dm-header">
+      <div class="dm-tabs">
+        <button class="dm-tab active" id="dm-tab-save">💾 저장</button>
+        <button class="dm-tab" id="dm-tab-load">📂 불러오기</button>
+      </div>
+      <button class="dm-close" id="dm-close">✕</button>
+    </div>
+    <div class="dm-body">
+      <!-- 저장 패널 -->
+      <div id="dm-panel-save">
+        <div class="dm-save-row">
+          <input id="dm-name-input" type="text" placeholder="저장 이름 입력…" maxlength="40"/>
+          <button class="dm-save-btn" id="dm-do-save">저장</button>
+        </div>
+        <div id="dm-slot-info" class="dm-slot-info"></div>
+      </div>
+      <!-- 불러오기 패널 -->
+      <div id="dm-panel-load" style="display:none">
+        <div class="dm-list" id="dm-load-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/konva@9/konva.min.js"></script>
+<script src="regression-dopt-module.js?v=1"></script>
 <script src="fluid-module.js?v=2"></script>
-<script src="solver-module.js?v=3"></script>
-<script src="canvas-design-module.js?v=3"></script>
+<script src="solver-module.js?v=4"></script>
+<script src="canvas-design-module.js?v=6"></script>
 <script src="catalog-fit-module.js?v=1"></script>
 <script src="three-view-module.js?v=3"></script>
 <script>
@@ -146,6 +456,35 @@ CanvasModule.init({
   modeButtons: { node: "btn-node", pump: "btn-pump", pipe: "btn-pipe", arrow: "btn-arrow", select: "btn-select", delete: "btn-delete" },
   clearBtnId: "btn-clear",
   selPopupId: "selPopup"
+});
+
+/* ---- 그리드 스냅 토글 ---- */
+(function(){
+  const btn = document.getElementById("btn-snap");
+  function updateBtn() {
+    const on = CanvasModule.isSnapEnabled();
+    btn.textContent = on ? "🔲 스냅 ON" : "⬜ 스냅 OFF";
+    btn.classList.toggle("snap-off", !on);
+  }
+  updateBtn();
+  btn.addEventListener("click", () => {
+    CanvasModule.setSnap(!CanvasModule.isSnapEnabled());
+    updateBtn();
+  });
+})();
+
+/* ---- 정렬 버튼 ---- */
+[
+  ["btn-align-left",    "left"],
+  ["btn-align-right",   "right"],
+  ["btn-align-top",     "top"],
+  ["btn-align-bottom",  "bottom"],
+  ["btn-align-centerH", "centerH"],
+  ["btn-align-centerV", "centerV"],
+  ["btn-dist-h",        "distH"],
+  ["btn-dist-v",        "distV"],
+].forEach(([id, how]) => {
+  document.getElementById(id).addEventListener("click", () => CanvasModule.alignNodes(how));
 });
 
 /* ---- 유체 물성 ---- */
@@ -262,7 +601,7 @@ function computeAllDopt(){
     if (Q == null) qMissing.push(`P${p.id}`);
     rows.push({ p, Q });
   });
-  if (qMissing.length) missing.push(`배관 유량 Q (배관에 "고정 유량" 직접 입력 또는 ▶ Hardy-Cross 계산을 먼저 실행): ${qMissing.join(", ")}`);
+  if (qMissing.length) missing.push(`배관 유량 Q (배관에 "고정 유량" 직접 입력 또는 ▶ HC 계산/Q+D Iteration을 먼저 실행): ${qMissing.join(", ")}`);
 
   if (missing.length) {
     out.innerHTML = `<div class="alert alert-warn">⚠️ 입력 부족 — 다음 항목을 채워주세요:<br/>${missing.map(m=>`· ${m}`).join("<br/>")}</div>`;
@@ -308,18 +647,240 @@ function renderDoptBox(r){
 
 /* ---- 계산 버튼 ---- */
 let lastSolve = null; // { state, gp, r } — 마지막 Hardy-Cross 계산 결과 (펌프 추천 결과 페이지로 전달용)
-document.getElementById("btn-solve").addEventListener("click", ()=>{
+
+/* ▶ HC 계산: 모든 배관에 D가 고정된 상태 → Q만 수렴 */
+document.getElementById("btn-solve-hc").addEventListener("click", ()=>{
+  const out = document.getElementById("solveStatus");
+  const state = CanvasModule.getState();
+  if(state.nodes.length<2 || state.pipes.length<1){ out.textContent="⚠ 노드 2개·배관 1개 이상 필요"; return; }
+  const gp = getGlobalParams();
+  const r = SolverModule.solveNetworkHConly(state, gp);
+  if(r.error){ out.textContent = "⚠ " + r.error; return; }
+  lastSolve = { state, gp, r };
+  out.textContent = `${r.converged?'✓ HC 수렴':'⚠️ HC 미수렴'} (${r.iterations}회) — D 고정, Q만 계산`;
+  CanvasModule.draw();
+  renderDoptBox(r);
+});
+
+/* ▶ Q+D Iteration: D를 입력하지 않은 배관은 D_opt 이중루프 알고리즘으로 계산 */
+document.getElementById("btn-solve-dopt").addEventListener("click", ()=>{
   const out = document.getElementById("solveStatus");
   const state = CanvasModule.getState();
   if(state.nodes.length<2 || state.pipes.length<1){ out.textContent="⚠ 노드 2개·배관 1개 이상 필요"; return; }
   const gp = getGlobalParams();
   const r = SolverModule.solveNetwork(state, gp);
-  if(r.error){ out.textContent = r.error; return; }
+  if(r.error){ out.textContent = "⚠ " + r.error; return; }
   lastSolve = { state, gp, r };
-  out.textContent = `${r.converged?'✓ 수렴':'⚠️ 미수렴'} (${r.iterations}회) — 자세한 결과는 Project Database 참조`;
+  // Q+D Iteration 결과 D 스냅샷 저장 (D회귀최적화 후 Evaluation 비교용)
+  lastSolve.doptPipeDs = Object.fromEntries(state.pipes.map(p => [p.id, p.D]));
+  out.textContent = `${r.converged?'✓ 수렴':'⚠️ 미수렴'} (${r.iterations}회 D-loop) — Project DB에서 상세 확인`;
   CanvasModule.draw();
   renderDoptBox(r);
+  document.getElementById("btn-nps").style.display = "";   // NPS 버튼 표시
+  document.getElementById("btn-eval").style.display = "";  // Evaluation 버튼 표시
 });
+
+/* 📏 NPS + HC: D_opt를 NPS 공칭 직경으로 변환 후 HC 즉시 재실행 */
+document.getElementById("btn-nps").addEventListener("click", ()=>{
+  const out = document.getElementById("solveStatus");
+  const state = CanvasModule.getState();
+
+  // 1. D_opt, Q_opt 백업 → D를 NPS로 변환
+  const npsConverted = [];
+  state.pipes.forEach(p => {
+    if (p.fixedD != null && isFinite(p.fixedD)) return;
+    if (p.D == null || !isFinite(p.D) || p.D <= 0) return;
+    p._doptM = p.D;                       // D_opt 보존 (buildProjectDatabase에서 사용)
+    p._qOpt  = p.Q;                       // Q_opt 보존
+    const nps = SolverModule.nearestNPS(p.D, p.schedule || 'SCH40');
+    p.D = nps.D_m;
+    npsConverted.push({ id: p.id, doptM: p._doptM, npsMm: nps.D_mm, npsDN: nps.DN, npsSchedule: nps.schedule });
+  });
+  if (!npsConverted.length) {
+    out.textContent = "⚠ 변환할 배관 없음 (D_opt 결과 없거나 모두 fixedD 배관)";
+    return;
+  }
+
+  // 2. NPS 직경 고정 상태로 HC 재실행
+  const gp = getGlobalParams();
+  const r = SolverModule.solveNetworkHConly(state, gp);
+  if (r.error) { out.textContent = "⚠ HC 오류: " + r.error; return; }
+
+  const prevDoptDs     = lastSolve && lastSolve.doptPipeDs;
+  const prevRegDoptDs  = lastSolve && lastSolve.regDoptDs;
+  r.mode = 'nps_hc';
+  r.npsConverted = npsConverted;
+  lastSolve = { state, gp, r };
+  if (prevDoptDs)     lastSolve.doptPipeDs      = prevDoptDs;
+  if (prevRegDoptDs)  lastSolve.regDoptDs       = prevRegDoptDs;
+
+  CanvasModule.draw();
+  renderDoptBox(r);
+  out.textContent = `📏 NPS+HC 완료 (${r.converged ? '✓ 수렴' : '⚠ 미수렴'}, ${r.iterations}회) — Project DB에서 NPS 결과 확인`;
+});
+
+/* ── Evaluation 비용 계산 헬퍼 ── */
+function evalComputeCosts(sc, baseState, gp, bf, a_crf, G, SM, DEF) {
+  let totalCap = 0, totalEng = 0;
+  const pipesData = sc.pipes.map(p => {
+    const orig = baseState.pipes.find(pp => pp.id === p.id);
+    if (!orig) return { id: p.id, D: p.D, Q: p.Q, cap: null, eng: null, tot: null };
+    const pipeBF = (bf && bf.perPipe && bf.perPipe[p.id]) ? bf.perPipe[p.id] : null;
+    const c1   = (orig.c1    != null && isFinite(orig.c1))    ? orig.c1    : DEF.C1;
+    const nexp = (orig.n_exp != null && isFinite(orig.n_exp)) ? orig.n_exp : DEF.n_exp;
+    const bv   = (pipeBF && isFinite(pipeBF.b)) ? pipeBF.b : DEF.b;
+    const Fv   = (pipeBF && isFinite(pipeBF.F)) ? pipeBF.F : DEF.F;
+    const L = orig.length, D = p.D, Q = p.Q;
+    let cap = null, eng = null;
+    if (D != null && isFinite(D) && D > 0 && a_crf != null)
+      cap = (a_crf + bv) * (1 + Fv) * c1 * Math.pow(D, nexp) * L;
+    if (Q != null && isFinite(Q) && D != null && isFinite(D) && D > 0 &&
+        isFinite(gp.rho) && isFinite(gp.mu) && isFinite(gp.C2) && isFinite(gp.t) && isFinite(gp.eta)) {
+      const nA = baseState.nodes.find(n => n.id === orig.from);
+      const nB = baseState.nodes.find(n => n.id === orig.to);
+      const elevDiff = (nA && nB && isFinite(nA.height) && isFinite(nB.height)) ? Math.abs(nB.height - nA.height) : 0;
+      const A  = SM.pipeArea(D), v = Q / A;
+      const Re = gp.rho * Math.abs(v) * D / gp.mu;
+      const f  = SM.colebrookF(Re, SM.pipeEps(orig) / D);
+      const hf = f * (L / D) * (v * Math.abs(v)) / (2 * G);
+      const sumK = (orig.fittingsK || []).reduce((s, k) => s + (SM.FITTING_K[k] || 0), 0);
+      const hm = sumK * (v * Math.abs(v)) / (2 * G);
+      eng = gp.C2 * gp.t * gp.rho * G * Math.abs(Q) * (elevDiff + Math.abs(hf) + Math.abs(hm)) / gp.eta / 1000;
+    }
+    if (cap != null) totalCap += cap;
+    if (eng != null) totalEng += eng;
+    return { id: p.id, D, Q, cap, eng, tot: (cap != null && eng != null) ? cap + eng : null };
+  });
+  return { pipesData, totalCap, totalEng };
+}
+
+/* 📊 Evaluation: 비용 비교 — Q+D Iteration / 회귀최솟값 / 랜덤 3케이스 */
+document.getElementById("btn-eval").addEventListener("click", () => {
+  const out = document.getElementById("solveStatus");
+  if (!lastSolve) { out.textContent = "⚠ HC+D 최적화를 먼저 실행하세요."; return; }
+
+  const baseState = lastSolve.state;
+  const gp  = lastSolve.gp;
+  const SM  = SolverModule;
+  const G   = SM.G;
+  const DEF = { C1: SM.DEFAULT_C1, n_exp: SM.DEFAULT_N_EXP, b: SM.DEFAULT_B, F: SM.DEFAULT_F };
+  const bf    = (lastSolve.r && lastSolve.r.bf) ? lastSolve.r.bf : SM.calcBF(baseState, gp);
+  const a_crf = SM.calcCRF(gp.i, gp.n);
+  const evalCases = [];
+
+  /* ── 케이스 1: Q+D Iteration 결과 (회귀 또는 NPS 실행 후에만 — 중복 방지) ── */
+  const isPostDopt = lastSolve.r && (lastSolve.r.mode === 'reg_dopt' || lastSolve.r.mode === 'nps_hc');
+  if (lastSolve.doptPipeDs && isPostDopt) {
+    const sc = JSON.parse(JSON.stringify(baseState));
+    sc.pipes.forEach(p => {
+      const d = lastSolve.doptPipeDs[p.id];
+      if (d != null && isFinite(d)) p.D = d;
+    });
+    const r2 = SM.solveNetworkHConly(sc, gp);
+    const { pipesData, totalCap, totalEng } = evalComputeCosts(sc, baseState, gp, bf, a_crf, G, SM, DEF);
+    evalCases.push({ label: 'Q+D Iteration', type: 'dopt',
+      converged: r2.converged, iterations: r2.iterations || 0,
+      pipes: pipesData, totalCap, totalEng, total: totalCap + totalEng });
+  }
+
+  /* ── 케이스 1b: D회귀최적화 결과 (reg_dopt 이후에만) ── */
+  if (lastSolve.regDoptDs && isPostDopt) {
+    const sc = JSON.parse(JSON.stringify(baseState));
+    sc.pipes.forEach(p => {
+      const d = lastSolve.regDoptDs[p.id];
+      if (d != null && isFinite(d)) p.D = d;
+    });
+    const r2b = SM.solveNetworkHConly(sc, gp);
+    const { pipesData, totalCap, totalEng } = evalComputeCosts(sc, baseState, gp, bf, a_crf, G, SM, DEF);
+    evalCases.push({ label: 'D회귀최적화', type: 'reg_dopt',
+      converged: r2b.converged, iterations: r2b.iterations || 0,
+      pipes: pipesData, totalCap, totalEng, total: totalCap + totalEng });
+  }
+
+  lastSolve.evalCases = evalCases;
+  const nExtra = (lastSolve.doptPipeDs ? 1 : 0);
+  out.textContent = `📊 Evaluation 완료 (${evalCases.length}케이스) — Project DB 총 비용 섹션에서 비교 확인`;
+});
+
+/* 📈 D회귀최적화: N(NSAMPLES) 랜덤 케이스 → 회귀 → 비용 최소 D → HC 확정 */
+(function(){
+  const btn = document.getElementById("btn-reg-dopt");
+  btn.addEventListener("click", () => {
+    const out = document.getElementById("solveStatus");
+    const state = CanvasModule.getState();
+
+    if (state.pipes.length === 0) { out.textContent = "⚠ 배관이 없습니다."; return; }
+
+    // D 기준값 확인 (최소 1개 배관에 D가 있어야 함)
+    const hasD = state.pipes.some(p =>
+      (p.D && isFinite(p.D) && p.D > 0) || (p.fixedD && isFinite(p.fixedD) && p.fixedD > 0)
+    );
+    if (!hasD) {
+      out.textContent = "⚠ 직경 기준값 없음 — 먼저 Q+D Iteration 실행 또는 팝업에서 직경 직접 입력하세요.";
+      return;
+    }
+
+    const gp = getGlobalParams();
+    btn.disabled = true;
+    const NSAMPLES = 700;   // 단일 소스 — 아래 텍스트는 모두 이 값을 참조
+    out.textContent = `⏳ D회귀최적화 시작… (샘플 0/${NSAMPLES})`;
+
+    RegressionDoptModule.run(state, gp, SolverModule, {
+      nSamples  : NSAMPLES,
+      dMinFactor: 0.25,
+      dMaxFactor: 4.0,
+
+      onProgress(k, total) {
+        out.textContent = `⏳ 샘플 생성 중 ${k}/${total}…`;
+      },
+
+      onDone(res) {
+        btn.disabled = false;
+
+        // lastSolve 업데이트
+        const prevDoptDs = lastSolve && lastSolve.doptPipeDs;  // HC+Dopt 스냅샷 전달
+        const r = {
+          mode      : 'reg_dopt',
+          converged : res.finalConverged,
+          iterations: res.finalIterations,
+          bf        : SolverModule.calcBF(state, gp),
+          gp,
+          regResult : res,
+        };
+        lastSolve = { state, gp, r };
+        if (prevDoptDs)       lastSolve.doptPipeDs      = prevDoptDs;
+        /* D회귀최적화 D_star 스냅샷 저장 */
+        const regDs = {};
+        state.pipes.forEach(p => { regDs[p.id] = p.D; });
+        lastSolve.regDoptDs = regDs;
+
+        CanvasModule.draw();
+        document.getElementById("btn-nps").style.display  = "";  // NPS 버튼 표시
+        document.getElementById("btn-eval").style.display = "";  // Evaluation 버튼 표시
+
+        // 회귀 결과 요약 박스
+        const DEF = { C1: SolverModule.DEFAULT_C1, n_exp: SolverModule.DEFAULT_N_EXP, b: SolverModule.DEFAULT_B, F: SolverModule.DEFAULT_F };
+        const a_crf = SolverModule.calcCRF(gp.i, gp.n);
+        document.getElementById("doptBox").innerHTML =
+          `[회귀 D최적화]  R²=${res.R2.toFixed(4)}, 유효샘플 ${res.nSamples}/${NSAMPLES}<br/>` +
+          `회귀 모델: C ≈ Σ (ã·(D/Dref)ⁿ + b̃·(D/Dref)⁻⁵)<br/>` +
+          res.pipeResults.map(pr =>
+            `P${pr.id}: Dref=${(pr.Dref*1000).toFixed(1)}mm → D*=${(pr.Dstar*1000).toFixed(1)}mm` +
+            `${!pr.aOk || !pr.bOk ? ' <b style="color:#dc2626">[계수 부호 오류→중앙값 대체]</b>' : ''}`
+          ).join('<br/>');
+
+        out.textContent =
+          `✅ D회귀최적화 — R²=${res.R2.toFixed(4)}, 샘플 ${res.nSamples}개, ` +
+          `HC ${res.finalConverged ? '✓ 수렴' : '⚠ 미수렴'} (${res.finalIterations}회) — Project DB에서 확인`;
+      },
+
+      onError(msg) {
+        btn.disabled = false;
+        out.textContent = "⚠ " + msg;
+      },
+    });
+  });
+})();
 
 /* ---- Project Database 페이지로 이동 ----
    Hardy-Cross 계산 결과(state.pipes의 Q, D, _Kp)를 바탕으로
@@ -330,6 +891,7 @@ function buildProjectDatabase(state, gp, r){
   const DEF = { C1: SM.DEFAULT_C1, n_exp: SM.DEFAULT_N_EXP, b: SM.DEFAULT_B, F: SM.DEFAULT_F };
   const bf = (r && r.bf) ? r.bf : SM.calcBF(state, gp);
   const G = SM.G;
+  const hasNPS = !!(r && r.mode === 'nps_hc');
 
   const pipes = state.pipes.map(p=>{
     const pipeBF = (bf && bf.perPipe && bf.perPipe[p.id]) ? bf.perPipe[p.id] : null;
@@ -338,8 +900,16 @@ function buildProjectDatabase(state, gp, r){
     const bApplied = (pipeBF && isFinite(pipeBF.b)) ? pipeBF.b : DEF.b;
     const FApplied = (pipeBF && isFinite(pipeBF.F)) ? pipeBF.F : DEF.F;
 
+    // NPS+HC 실행 시 D_opt = _doptM(변환 전), Q_opt = _qOpt(변환 전)
+    // 그 외: D_opt = p.D, Q_opt = p.Q
+    const D_opt = hasNPS && p._doptM != null && isFinite(p._doptM) ? p._doptM : p.D;
+    const Q_opt = hasNPS && p._qOpt  != null && isFinite(p._qOpt)  ? p._qOpt  : p.Q;
+    const D_nps = hasNPS ? p.D : null;   // NPS 변환 후 직경
+    const Q_nps = hasNPS ? p.Q : null;   // NPS HC 재계산 유량
+
+    // 수두 손실은 D_opt + Q_opt 기준 (③ 섹션 표시용)
     let hf=null, hm=null, hLoss=null, elevDiff=null, H_total=null, ratio=null;
-    const D = p.D, Q = p.Q;
+    const D = D_opt, Q = Q_opt;
     if (D != null && isFinite(D) && D > 0 && Q != null && isFinite(Q)) {
       const A = SM.pipeArea(D);
       const v = Q / A;
@@ -357,7 +927,10 @@ function buildProjectDatabase(state, gp, r){
     }
 
     return {
-      id: p.id, from: p.from, to: p.to, length: p.length, D, Q, fixedQ: p.fixedQ,
+      id: p.id, from: p.from, to: p.to, length: p.length,
+      D: D_opt, Q: Q_opt,   // D_opt + D_opt 기준 유량
+      D_nps, Q_nps,          // NPS 직경 + NPS HC 유량 (hasNpsResult일 때만 존재)
+      fixedQ: p.fixedQ,
       eps: p.eps, material: p.material, fittingsK: p.fittingsK || [],
       c1Applied, nExpApplied, bApplied, FApplied,
       hf, hm, hLoss, elevDiff, H_total, ratio,
@@ -375,6 +948,11 @@ function buildProjectDatabase(state, gp, r){
     loops: r ? r.loops : (SM.findLoops ? SM.findLoops(state).length : null),
     Q_out_m3h: r ? r.Q_out_m3h : null,
     bfSummary: bf ? { b_total: bf.b_total, F_total: bf.F_total, count: bf.count } : null,
+    hasNpsResult: hasNPS,
+    npsConverted: hasNPS ? (r.npsConverted || []) : null,
+    npsIterations: hasNPS ? r.iterations : null,
+    npsConverged: hasNPS ? r.converged : null,
+    evalCases: (lastSolve && lastSolve.evalCases) ? lastSolve.evalCases : null,
     pipes, pumps,
   };
 }
@@ -390,6 +968,179 @@ document.getElementById("btn-pump-result").addEventListener("click", ()=>{
   saveDesignState();
   window.location.href = "project-database.html";
 });
+
+/* ---- 연속방정식 검사: 화살표 유량 합계 = 0 인지 확인 ---- */
+document.getElementById('btn-continuity').addEventListener('click', () => {
+  const out = document.getElementById('solveStatus');
+  const arrows = CanvasModule.getState().arrows || [];
+
+  if (!arrows.length) {
+    out.textContent = "⚠ 외부 유출입 화살표가 없습니다.";
+    return;
+  }
+
+  const inflow  = arrows.filter(ar => (ar.flow || 0) > 0).reduce((s, ar) => s + ar.flow, 0);
+  const outflow = arrows.filter(ar => (ar.flow || 0) < 0).reduce((s, ar) => s + Math.abs(ar.flow), 0);
+  const balance = inflow - outflow;          // 0이면 연속방정식 만족
+  const TOL = 1e-6;                          // m³/s
+
+  const inf_h = (inflow  * 3600).toFixed(4);
+  const out_h = (outflow * 3600).toFixed(4);
+  const bal_h = (balance * 3600).toExponential(3);
+
+  if (Math.abs(balance) < TOL) {
+    out.textContent = `✅ 연속방정식 만족 — 유입 ${inf_h} = 유출 ${out_h} m³/h`;
+  } else {
+    out.textContent = `❌ 불균형 — 유입 ${inf_h} − 유출 ${out_h} = ${bal_h} m³/h`;
+  }
+});
+
+/* ---- 디자인 저장/불러오기 (localStorage, 최대 5개) ---- */
+(function(){
+  const STORAGE_KEY = "hc_saved_designs";
+  const MAX = 5;
+
+  function getAll(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]"); }catch(e){ return []; } }
+  function setAll(arr){ localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); }
+
+  function collectFields(){
+    const fields = {};
+    SAVED_FIELD_IDS.concat(FLUID_FIELD_IDS).forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) fields[id] = el.value;
+    });
+    return fields;
+  }
+
+  // ── 모달 열기/닫기 ──
+  const modal  = document.getElementById("designModal");
+  const tabSave= document.getElementById("dm-tab-save");
+  const tabLoad= document.getElementById("dm-tab-load");
+  const pSave  = document.getElementById("dm-panel-save");
+  const pLoad  = document.getElementById("dm-panel-load");
+  const btnClose=document.getElementById("dm-close");
+  const nameInput=document.getElementById("dm-name-input");
+  const slotInfo =document.getElementById("dm-slot-info");
+  const loadList =document.getElementById("dm-load-list");
+
+  function switchTab(mode){
+    if(mode==="save"){
+      tabSave.classList.add("active"); tabLoad.classList.remove("active");
+      pSave.style.display=""; pLoad.style.display="none";
+      refreshSlotInfo();
+    } else {
+      tabLoad.classList.add("active"); tabSave.classList.remove("active");
+      pLoad.style.display=""; pSave.style.display="none";
+      renderLoadList();
+    }
+  }
+  tabSave.addEventListener("click",()=>switchTab("save"));
+  tabLoad.addEventListener("click",()=>switchTab("load"));
+  btnClose.addEventListener("click",()=>modal.classList.remove("open"));
+  modal.addEventListener("click",e=>{ if(e.target===modal) modal.classList.remove("open"); });
+
+  function refreshSlotInfo(){
+    const n = getAll().length;
+    if(n>=MAX){
+      slotInfo.className="dm-slot-warn";
+      slotInfo.textContent=`슬롯 ${n}/${MAX} — 저장 시 가장 오래된 항목이 삭제됩니다.`;
+    } else {
+      slotInfo.className="dm-slot-info";
+      slotInfo.textContent=`슬롯 ${n}/${MAX} 사용 중`;
+    }
+  }
+
+  // ── 저장 버튼 ──
+  document.getElementById("btn-save-design").addEventListener("click",()=>{
+    const state = CanvasModule.getState();
+    // 기본 이름 제안: 노드/배관 개수 기반
+    const now = new Date();
+    const mm = String(now.getMonth()+1).padStart(2,"0");
+    const dd = String(now.getDate()).padStart(2,"0");
+    const hh = String(now.getHours()).padStart(2,"0");
+    const mi = String(now.getMinutes()).padStart(2,"0");
+    nameInput.value = `설계 ${mm}/${dd} ${hh}:${mi}`;
+    switchTab("save");
+    modal.classList.add("open");
+    nameInput.focus();
+    nameInput.select();
+  });
+
+  document.getElementById("dm-do-save").addEventListener("click",()=>{
+    const name = nameInput.value.trim() || "이름 없는 설계";
+    const designs = getAll();
+    if(designs.length>=MAX) designs.shift(); // 가장 오래된 것 제거
+
+    const state = CanvasModule.getState();
+    designs.push({
+      id: Date.now(),
+      name,
+      savedAt: Date.now(),
+      canvas: CanvasModule.exportState(),
+      fields: collectFields(),
+      meta: { nodeCount: state.nodes.length, pipeCount: state.pipes.length, arrowCount: (state.arrows||[]).length }
+    });
+    setAll(designs);
+    modal.classList.remove("open");
+    document.getElementById("solveStatus").textContent = `💾 "${name}" 저장 완료`;
+  });
+  // Enter 키로 저장
+  nameInput.addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("dm-do-save").click(); });
+
+  // ── 불러오기 버튼 ──
+  document.getElementById("btn-load-design").addEventListener("click",()=>{
+    switchTab("load");
+    modal.classList.add("open");
+  });
+
+  function renderLoadList(){
+    const designs = getAll();
+    if(!designs.length){
+      loadList.innerHTML=`<div class="dm-empty">저장된 설계가 없습니다.</div>`;
+      return;
+    }
+    loadList.innerHTML = designs.map((d,i)=>{
+      const dt = new Date(d.savedAt);
+      const dateStr = `${String(dt.getMonth()+1).padStart(2,"0")}/${String(dt.getDate()).padStart(2,"0")} ${String(dt.getHours()).padStart(2,"0")}:${String(dt.getMinutes()).padStart(2,"0")}`;
+      const meta = d.meta ? `노드 ${d.meta.nodeCount}개 · 배관 ${d.meta.pipeCount}개` : "";
+      return `<div class="dm-item">
+        <div class="dm-item-info">
+          <span class="dm-item-name">${d.name}</span>
+          <span class="dm-item-meta">${dateStr}　${meta}</span>
+        </div>
+        <div class="dm-item-btns">
+          <button class="dm-btn-load" data-idx="${i}">불러오기</button>
+          <button class="dm-btn-del" data-idx="${i}">🗑</button>
+        </div>
+      </div>`;
+    }).join("");
+
+    loadList.querySelectorAll(".dm-btn-load").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const d = getAll()[+btn.dataset.idx];
+        if(!d) return;
+        if(d.canvas) CanvasModule.loadState(d.canvas);
+        if(d.fields){
+          SAVED_FIELD_IDS.forEach(id=>setFieldValue(id, d.fields[id]));
+          Promise.resolve(fluidInitP).then(()=>FLUID_FIELD_IDS.forEach(id=>setFieldValue(id, d.fields[id])));
+        }
+        lastSolve = null;
+        document.getElementById("btn-nps").style.display = "none";
+        document.getElementById("solveStatus").textContent = `📂 "${d.name}" 불러옴`;
+        modal.classList.remove("open");
+      });
+    });
+    loadList.querySelectorAll(".dm-btn-del").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const designs = getAll();
+        const idx = +btn.dataset.idx;
+        const removed = designs.splice(idx,1);
+        setAll(designs);
+        renderLoadList(); // 목록 갱신
+      });
+    });
+  }
+})();
 
 /* ---- 참고 사진 업로드 & 1/4 화면 보기 패널 ---- */
 (function(){

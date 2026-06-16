@@ -42,4 +42,3 @@
     "b_total_formula": "(base_b + sum(component_b)) * pump_count_multiplier"
   }
 }
-
